@@ -92,7 +92,7 @@ def load_config() -> Config:
             chat_id=_require_env("MY_TELEGRAM_CHAT_ID"),
         ),
         gmail=GmailConfig(
-            sender_address=_require_env("GMAIL_SENDER_ADDRESS"),
+            sender_address=os.environ.get("GMAIL_ADDRESS") or _require_env("GMAIL_SENDER_ADDRESS"),
             app_password=_require_env("GMAIL_APP_PASSWORD"),
         ),
         dispatch=DispatchConfig(

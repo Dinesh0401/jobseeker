@@ -15,6 +15,19 @@
 
 
 -- ============================================================
+-- CLEANUP (Ensures idempotent execution on fresh/test databases)
+-- ============================================================
+
+DROP TABLE IF EXISTS action_queue CASCADE;
+DROP TABLE IF EXISTS application_assets CASCADE;
+DROP TABLE IF EXISTS job_evaluations CASCADE;
+DROP TABLE IF EXISTS jobs CASCADE;
+DROP TYPE IF EXISTS application_state CASCADE;
+DROP FUNCTION IF EXISTS update_jobs_updated_at() CASCADE;
+DROP FUNCTION IF EXISTS transition_job_state CASCADE;
+
+
+-- ============================================================
 -- ENUMS
 -- ============================================================
 
@@ -173,20 +186,20 @@ CREATE TABLE action_queue (
 -- INDEXES
 -- ============================================================
 
-CREATE INDEX idx_jobs_state
+CREATE INDEX IF NOT EXISTS idx_jobs_state
     ON jobs(state);
 
-CREATE INDEX idx_jobs_url
+CREATE INDEX IF NOT EXISTS idx_jobs_url
     ON jobs(url);
 
-CREATE INDEX idx_jobs_created
+CREATE INDEX IF NOT EXISTS idx_jobs_created
     ON jobs(created_at DESC);
 
-CREATE INDEX idx_action_queue_pending
+CREATE INDEX IF NOT EXISTS idx_action_queue_pending
     ON action_queue(status)
     WHERE status = 'APPROVED_FOR_DISPATCH';
 
-CREATE INDEX idx_action_queue_idempotency
+CREATE INDEX IF NOT EXISTS idx_action_queue_idempotency
     ON action_queue(idempotency_key);
 
 
@@ -388,6 +401,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
+DROP TRIGGER IF EXISTS trg_jobs_updated_at ON jobs;
 CREATE TRIGGER trg_jobs_updated_at
     BEFORE UPDATE ON jobs
     FOR EACH ROW
