@@ -1,0 +1,94 @@
+name: Follow-up Scanner
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Daily at 9:00 UTC
+  workflow_dispatch:
+
+jobs:
+  followup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scan for Follow-ups
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          MY_TELEGRAM_CHAT_ID: ${{ secrets.MY_TELEGRAM_CHAT_ID }}
+        run: |
+          python -c "
+          import os, json, logging
+          from datetime import datetime, timedelta, timezone
+          logging.basicConfig(level=logging.INFO)
+
+          from src.db.client import get_connection
+
+          conn = get_connection()
+
+          try:
+              with conn.cursor() as cur:
+                  # Find SENT applications older than 7 days with no follow-up
+                  cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+                  cur.execute('''
+                      SELECT j.id, j.title, j.company, e.contact_email,
+                             q.executed_at
+                      FROM jobs j
+                      JOIN job_evaluations e ON j.id = e.job_id
+                      JOIN action_queue q ON j.id = q.job_id
+                      WHERE j.state = 'SENT'
+                        AND q.status = 'DONE'
+                        AND q.executed_at < %s
+                      ORDER BY q.executed_at ASC;
+                  ''', (cutoff,))
+                  stale = cur.fetchall()
+
+                  if not stale:
+                      print('No follow-ups needed.')
+                  else:
+                      print(f'Found {len(stale)} applications pending follow-up:')
+
+                      # Build Telegram notification
+                      lines = ['📋 *Follow-up Reminder*\n']
+                      for row in stale:
+                          days_ago = (datetime.now(timezone.utc) - row['executed_at'].replace(tzinfo=timezone.utc)).days
+                          lines.append(
+                              f'• *{row[\"title\"]}* at {row[\"company\"]} '
+                              f'({row[\"contact_email\"]}) — sent {days_ago}d ago'
+                          )
+
+                      message = '\n'.join(lines)
+
+                      # Send via Telegram
+                      import urllib.request
+                      bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+                      chat_id = os.getenv('MY_TELEGRAM_CHAT_ID')
+                      url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
+                      payload = json.dumps({
+                          'chat_id': chat_id,
+                          'text': message,
+                          'parse_mode': 'Markdown',
+                      }).encode()
+                      req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+                      urllib.request.urlopen(req, timeout=10)
+
+                      # Transition to FOLLOW_UP state
+                      for row in stale:
+                          cur.execute(
+                              \"UPDATE jobs SET state = 'FOLLOW_UP' WHERE id = %s AND state = 'SENT'\",
+                              (row['id'],)
+                          )
+                      conn.commit()
+                      print(f'Transitioned {len(stale)} jobs to FOLLOW_UP.')
+          finally:
+              conn.close()
+          "

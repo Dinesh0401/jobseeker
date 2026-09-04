@@ -1,0 +1,105 @@
+name: Job Collector & Matcher
+on:
+  schedule:
+    - cron: '0 */1 * * *'  # Every hour
+  workflow_dispatch:
+
+jobs:
+  collect-and-match:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Collector Pipeline
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          MY_TELEGRAM_CHAT_ID: ${{ secrets.MY_TELEGRAM_CHAT_ID }}
+        run: |
+          python -c "
+          import json, logging
+          logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(levelname)s %(message)s')
+
+          from src.config import load_config
+          from src.db.client import DatabaseClient, get_connection
+          from src.collectors.scraper import run_collection
+          from src.evaluators.extraction import run_extraction
+          from src.evaluators.matcher import evaluate_job
+
+          config = load_config()
+          db = DatabaseClient(config.supabase)
+
+          # Step 1: Collect new jobs
+          new_count = run_collection(db)
+          print(f'Collected {new_count} new jobs')
+
+          # Step 2: Extract deterministic facts from INGESTED jobs
+          ingested = db.get_jobs_by_state('INGESTED')
+          for job in ingested:
+              extraction = run_extraction(job.get('description', ''))
+              evaluation_data = {
+                  'contact_email': extraction.contact_email,
+                  'min_experience': extraction.min_experience,
+                  'german_requirement': extraction.german_requirement.value,
+                  'score': 0,
+              }
+              db.upsert_evaluation(job['id'], evaluation_data)
+              db.transition_state(job['id'], 'EVALUATED')
+
+          # Step 3: Run Gemini matcher on EVALUATED jobs
+          profile_path = 'profile/profile.json'
+          with open(profile_path) as f:
+              profile = json.load(f)
+
+          evaluated = db.get_jobs_by_state('EVALUATED')
+          for job in evaluated:
+              eval_record = db.get_evaluation(job['id'])
+              deterministic_facts = {
+                  'contact_email': eval_record.get('contact_email'),
+                  'min_experience': eval_record.get('min_experience'),
+                  'german_requirement': eval_record.get('german_requirement', 'UNKNOWN'),
+              }
+
+              result = evaluate_job(
+                  title=job['title'],
+                  company=job['company'],
+                  description=job.get('description', ''),
+                  profile=profile,
+                  deterministic_facts=deterministic_facts,
+              )
+
+              # Update evaluation with Gemini results
+              db.upsert_evaluation(job['id'], {
+                  'score': result.get('score', 0),
+                  'method': result.get('method', 'UNKNOWN'),
+                  'contact_email': eval_record.get('contact_email'),  # Keep deterministic email
+                  'tech_matches': json.dumps(result.get('tech_matches', [])),
+                  'gaps': json.dumps(result.get('gaps', [])),
+                  'tailored_cv_bullets': json.dumps(result.get('tailored_cv_bullets', [])),
+                  'cover_letter_pitch': result.get('cover_letter_pitch', ''),
+                  'german_requirement': eval_record.get('german_requirement', 'UNKNOWN'),
+                  'min_experience': eval_record.get('min_experience'),
+              })
+
+              # Transition based on score threshold
+              threshold = int('${{ vars.MATCH_THRESHOLD }}' or '60')
+              if result.get('score', 0) >= threshold and result.get('verdict') != 'SKIP':
+                  db.transition_state(job['id'], 'MATCHED')
+                  print(f'MATCHED: {job[\"title\"]} at {job[\"company\"]} (score={result[\"score\"]})')
+              else:
+                  db.transition_state(job['id'], 'REJECTED')
+                  print(f'REJECTED: {job[\"title\"]} at {job[\"company\"]} (score={result.get(\"score\", 0)})')
+
+          print('Pipeline complete.')
+          "
