@@ -1,0 +1,14 @@
+[
+  {
+    "key": "exp_example",
+    "company": "Example Corp",
+    "role": "Software Developer",
+    "start_date": "2022-01",
+    "end_date": "2024-06",
+    "responsibilities": [
+      "Led development of microservices architecture",
+      "Implemented CI/CD pipelines reducing deployment time by 60%"
+    ],
+    "technologies": ["Python", "Docker", "PostgreSQL", "GitHub Actions"]
+  }
+]

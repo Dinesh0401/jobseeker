@@ -1,0 +1,53 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1.5cm]{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{titlesec}
+
+\definecolor{primary}{RGB}{37,99,235}
+\definecolor{gray600}{RGB}{75,85,99}
+
+\titleformat{\section}{\large\bfseries\color{primary}}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{12pt}{6pt}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlist[itemize]{leftmargin=1.5em, itemsep=2pt, parsep=0pt}
+
+\begin{document}
+
+% ============================================================
+% This is the base template. The CVBuilder replaces
+% <<PLACEHOLDER>> tokens with actual profile data.
+% Do not use this file directly — it serves as a reference.
+% ============================================================
+
+{\LARGE\bfseries <<NAME>>} \\[4pt]
+{\color{gray600} <<TITLE>>} \\[2pt]
+{\small <<EMAIL>> \quad | \quad <<LOCATION>>}
+
+\vspace{8pt}
+
+\section{Summary}
+<<SUMMARY>>
+
+\section{Technical Skills}
+<<SKILLS>>
+
+\section{Experience}
+<<EXPERIENCE_ENTRIES>>
+
+\section{Projects}
+<<PROJECT_ENTRIES>>
+
+\section{Education}
+<<EDUCATION>>
+
+\section{Languages}
+<<LANGUAGES>>
+
+\end{document}

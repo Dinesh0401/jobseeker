@@ -1,0 +1,29 @@
+{
+  "name": "Dinesh",
+  "title": "Full-Stack Developer",
+  "email": "your-email@example.com",
+  "location": "Berlin, Germany",
+  "summary": "Full-stack developer with expertise in Python, PostgreSQL, and cloud-native architectures.",
+  "skills": [
+    "Python",
+    "PostgreSQL",
+    "JavaScript",
+    "TypeScript",
+    "React",
+    "Docker",
+    "Git",
+    "REST APIs",
+    "CI/CD"
+  ],
+  "languages": [
+    {"language": "English", "level": "Fluent"},
+    {"language": "German", "level": "B1"}
+  ],
+  "education": [
+    {
+      "degree": "B.Sc. Computer Science",
+      "institution": "Your University",
+      "year": 2020
+    }
+  ]
+}

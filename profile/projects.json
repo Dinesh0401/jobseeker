@@ -1,0 +1,13 @@
+[
+  {
+    "key": "project_example",
+    "name": "Example Project",
+    "description": "A sample project demonstrating full-stack capabilities.",
+    "technologies": ["Python", "PostgreSQL", "React"],
+    "year": 2024,
+    "highlights": [
+      "Designed and implemented RESTful API serving 10k+ requests/day",
+      "Built real-time data pipeline with PostgreSQL triggers"
+    ]
+  }
+]

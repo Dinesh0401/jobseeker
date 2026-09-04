@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment & Secrets
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# Supabase
+supabase/.temp/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# Test / Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Node (Edge Functions)
+node_modules/
+supabase/functions/*/node_modules/
+
+# Generated
+*.pdf
+output/
