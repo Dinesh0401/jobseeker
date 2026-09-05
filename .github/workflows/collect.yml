@@ -34,8 +34,8 @@ jobs:
       - name: Compile LaTeX CVs
         uses: xu-cheng/latex-action@v3
         with:
-          root_file: "*.tex"
-          working_directory: output/
+          root_file: output/*.tex
+          args: -pdf -file-line-error -halt-on-error -interaction=nonstopmode -outdir=output
 
       - name: Run Pipeline (Phase 2 - Finalize Assets & Notify)
         env:
