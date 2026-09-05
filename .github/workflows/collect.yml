@@ -46,3 +46,4 @@ jobs:
           GMAIL_SENDER_ADDRESS: ${{ secrets.GMAIL_SENDER_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python -m src.pipeline --phase finalize_assets
+# trigger update
