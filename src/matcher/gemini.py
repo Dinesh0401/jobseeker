@@ -49,7 +49,7 @@ _MATCH_PROMPT = """You are a job-matching assistant. Compare this job posting ag
 1. Score the match from 0 to 100 based on skills, experience, location, and language fit.
 2. List technologies that match between the job and candidate.
 3. List gaps where the candidate falls short.
-4. Select 2-4 specific entries from the candidate's profile (by their "key" field) that should be highlighted in a tailored CV.
+4. Select 2-4 specific entries from the candidate's profile (by their EXACT "key" field) that should be highlighted in a tailored CV. DO NOT write new bullets. ONLY output the exact keys.
 5. Write a 2-3 sentence cover letter pitch customized to this job.
 
 ## Output Format
@@ -59,7 +59,7 @@ Respond with ONLY a valid JSON object — no markdown, no explanation:
   "method": "gemini-2.5-flash",
   "tech_matches": ["tech1", "tech2"],
   "gaps": ["gap1", "gap2"],
-  "tailored_cv_bullets": ["profile.experience[key1]", "profile.projects[key2]"],
+  "tailored_cv_bullets": ["exp_example", "proj_backend"],
   "cover_letter_pitch": "<2-3 sentence pitch>"
 }}"""
 

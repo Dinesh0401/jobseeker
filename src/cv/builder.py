@@ -121,33 +121,23 @@ def _resolve_bullet_references(
     }
 
     for bullet in bullets:
+        key = bullet.strip()
+        
         # Check experience references
-        exp_match = exp_pattern.search(bullet)
+        exp_match = exp_pattern.search(key)
         if exp_match:
             key = exp_match.group(1)
-            if key in valid_exp_keys:
-                experience_keys.append(key)
-            else:
-                logger.warning(
-                    "CV integrity: Gemini referenced non-existent experience key '%s' — SKIPPED",
-                    key,
-                )
-            continue
-
-        # Check project references
-        proj_match = proj_pattern.search(bullet)
+            
+        proj_match = proj_pattern.search(key)
         if proj_match:
             key = proj_match.group(1)
-            if key in valid_proj_keys:
-                project_keys.append(key)
-            else:
-                logger.warning(
-                    "CV integrity: Gemini referenced non-existent project key '%s' — SKIPPED",
-                    key,
-                )
-            continue
 
-        logger.warning("CV integrity: Unrecognized bullet format: '%s' — SKIPPED", bullet)
+        if key in valid_exp_keys:
+            experience_keys.append(key)
+        elif key in valid_proj_keys:
+            project_keys.append(key)
+        else:
+            logger.warning("CV integrity: Unrecognized or invalid key: '%s' — SKIPPED", bullet)
 
     return {
         "experience_keys": experience_keys,
