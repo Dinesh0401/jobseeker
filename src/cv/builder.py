@@ -269,6 +269,7 @@ class CVBuilder:
         job_id: str,
         tailored_cv_bullets: List[str],
         job_title: Optional[str] = None,
+        compile_pdf: bool = True,
     ) -> str:
         """
         Generate a tailored CV PDF.
@@ -341,23 +342,27 @@ class CVBuilder:
         logger.info("Generated LaTeX: %s (for job: %s)", tex_path, job_title or job_id[:12])
 
         # Compile to PDF (local only — CI uses xu-cheng/latex-action)
-        try:
-            result = subprocess.run(
-                ["pdflatex", "-interaction=nonstopmode", "-output-directory", str(self._output_dir), str(tex_path)],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if result.returncode != 0:
-                logger.error("pdflatex failed:\n%s", result.stderr[-1000:])
-                raise RuntimeError(f"LaTeX compilation failed: {result.stderr[-500:]}")
-        except FileNotFoundError:
-            logger.warning(
-                "pdflatex not found locally. .tex file saved at %s. "
-                "Use xu-cheng/latex-action in CI to compile.",
-                tex_path,
-            )
-            return str(tex_path)
+        if compile_pdf:
+            try:
+                result = subprocess.run(
+                    ["pdflatex", "-interaction=nonstopmode", "-output-directory", str(self._output_dir), str(tex_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if result.returncode != 0:
+                    logger.error("pdflatex failed:\n%s", result.stderr[-1000:])
+                    raise RuntimeError(f"LaTeX compilation failed: {result.stderr[-500:]}")
+            except FileNotFoundError:
+                logger.warning(
+                    "pdflatex not found locally. .tex file saved at %s. "
+                    "Use xu-cheng/latex-action in CI to compile.",
+                    tex_path,
+                )
+                return str(tex_path)
 
-        logger.info("Compiled PDF: %s", pdf_path)
-        return str(pdf_path)
+            logger.info("Compiled PDF: %s", pdf_path)
+            return str(pdf_path)
+        else:
+            logger.info("compile_pdf=False: Skipping local compilation. Returning .tex path.")
+            return str(tex_path)
