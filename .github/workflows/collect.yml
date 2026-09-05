@@ -34,8 +34,8 @@ jobs:
       - name: Compile LaTeX CVs
         uses: xu-cheng/latex-action@v3
         with:
-          root_file: output/*.tex
-          continue_on_error: true # Don't fail the whole action if one CV fails
+          root_file: "*.tex"
+          working_directory: output/
 
       - name: Run Pipeline (Phase 2 - Finalize Assets & Notify)
         env:
