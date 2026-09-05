@@ -121,8 +121,9 @@ def phase_finalize_assets(db: DatabaseClient, output_dir: str = "output"):
         
         # Rule: A job MUST NOT transition to ASSETS_READY unless the PDF exists.
         if not pdf_path.exists():
-            logger.error(f"Missing PDF for job {job_id} at {pdf_path}. Cannot transition to ASSETS_READY.")
-            continue
+            error_msg = f"Missing PDF for job {job_id} at {pdf_path}. Cannot transition to ASSETS_READY."
+            logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
         
         # Insert application_assets
         eval_record = db.get_evaluation(job_id)
