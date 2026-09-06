@@ -73,6 +73,13 @@ def evaluate_job(
     Company: {company}
     Description: {description[:3500]}
     
+    Instructions:
+    1. Score the match from 0 to 100 based on skills, experience, location, and language fit.
+    2. List technologies that match between the job and candidate.
+    3. List gaps where the candidate falls short.
+    4. Provide exactly 2-4 EXACT keys from the Candidate Profile (from experience.json or projects.json) that should be highlighted in a tailored CV. The format MUST be exactly "profile.experience[KEY]" or "profile.projects[KEY]". DO NOT invent bullets. The array must contain ONLY string keys that exist in the JSON.
+    5. Write a 2-3 sentence cover letter pitch customized to this job.
+    
     Output strictly valid JSON:
     {{
       "score": <0-100>,
@@ -81,7 +88,7 @@ def evaluate_job(
       "contact_email": "<Use email from Deterministic Facts ONLY, or null>",
       "tech_matches": ["list"],
       "gaps": ["list"],
-      "tailored_cv_bullets": ["<Bullet mapped ONLY to profile.json experience>"],
+      "tailored_cv_bullets": ["profile.experience[<KEY>]", "profile.projects[<KEY>]"],
       "cover_letter_pitch": "<Concise 100-word pitch>"
     }}
     """
