@@ -75,6 +75,7 @@ def dispatch_approved_applications():
 
         with conn.cursor() as cur:
             # 1. Fetch up to 5 APPROVED items with row-level lock
+            # 1. Fetch up to 5 APPROVED items with row-level lock
             cur.execute("""
                 SELECT
                     q.id,
@@ -83,7 +84,7 @@ def dispatch_approved_applications():
                     e.contact_email,
                     j.title,
                     j.company,
-                    a.cover_letter_body,
+                    j.description,
                     a.cv_pdf_path
                 FROM action_queue q
                 JOIN jobs j ON q.job_id = j.id
@@ -102,14 +103,36 @@ def dispatch_approved_applications():
 
             logger.info("Processing %d dispatch items", len(tasks))
 
+            from google import genai
+            import json
+            from src.matcher.gemini import load_profile
+            
+            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+            profile = load_profile("profile")
+
             for task in tasks:
                 queue_id = task["id"]
                 job_id = task["job_id"]
                 contact_email = task["contact_email"]
                 title = task["title"]
                 company = task["company"]
-                cover_letter = task["cover_letter_body"]
+                description = task.get("description", "")
                 cv_path = task["cv_pdf_path"]
+                
+                # --- SAFETY GATES ---
+                if not contact_email or "@" not in contact_email:
+                    logger.error("Safety Gate Failed: Missing/invalid email for job %s. Marking FAILED.", job_id)
+                    cur.execute("UPDATE action_queue SET status = 'FAILED' WHERE id = %s", (queue_id,))
+                    cur.execute("UPDATE jobs SET state = 'APPROVED' WHERE id = %s AND state = 'DISPATCHING'", (job_id,))
+                    conn.commit()
+                    continue
+                    
+                if not cv_path or not os.path.exists(cv_path):
+                    logger.error("Safety Gate Failed: Missing CV PDF for job %s. Marking FAILED.", job_id)
+                    cur.execute("UPDATE action_queue SET status = 'FAILED' WHERE id = %s", (queue_id,))
+                    cur.execute("UPDATE jobs SET state = 'APPROVED' WHERE id = %s AND state = 'DISPATCHING'", (job_id,))
+                    conn.commit()
+                    continue
 
                 # 2. Lock execution state
                 cur.execute(
@@ -136,29 +159,50 @@ def dispatch_approved_applications():
                     )
                     conn.commit()
                     continue
+                    
+                # 4. Generate dynamic email
+                prompt = f"""
+                Write a highly professional, tailored application email for the job "{title}" at "{company}".
+                
+                Job Description: {description[:3500]}
+                
+                Candidate Profile: {json.dumps(profile)}
+                
+                CRITICAL RULES:
+                1. DO NOT hallucinate any experience, tools, projects, or metrics not present in the Candidate Profile.
+                2. Write in a confident, concise, and professional tone.
+                3. Keep it under 200 words.
+                4. Do not include subject lines or placeholder headers, just the email body starting with a professional greeting.
+                5. The email is coming from "Dinesh S J".
+                """
+                
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=prompt,
+                    )
+                    email_body = response.text.strip()
+                except Exception as e:
+                    logger.error("Gemini failed to compose email for %s: %s", job_id, e)
+                    email_body = f"Dear Hiring Team at {company},\n\nPlease find my application attached.\n\nBest,\nDinesh S J"
 
                 try:
-                    # 4. Compose email
+                    # 5. Compose email
                     msg = MIMEMultipart()
                     msg["From"] = os.getenv("GMAIL_ADDRESS")
                     msg["To"] = contact_email
                     msg["Subject"] = f"Application: {title} - Dinesh S J"
-                    msg.attach(MIMEText(cover_letter or "", "plain"))
+                    msg.attach(MIMEText(email_body, "plain"))
 
-                    # Attach CV PDF if exists
-                    if cv_path and os.path.exists(cv_path):
-                        with open(cv_path, "rb") as f:
-                            attach = MIMEApplication(f.read(), _subtype="pdf")
-                            attach.add_header(
-                                "Content-Disposition",
-                                "attachment",
-                                filename="Dinesh_SJ_Resume.pdf",
-                            )
-                            msg.attach(attach)
-                    else:
-                        logger.warning(
-                            "CV PDF not found at %s for job %s", cv_path, job_id
+                    # Attach CV PDF
+                    with open(cv_path, "rb") as f:
+                        attach = MIMEApplication(f.read(), _subtype="pdf")
+                        attach.add_header(
+                            "Content-Disposition",
+                            "attachment",
+                            filename="Dinesh_SJ_Resume.pdf",
                         )
+                        msg.attach(attach)
 
                     # 5. Send via SMTP_SSL
                     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:

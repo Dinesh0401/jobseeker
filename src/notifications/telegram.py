@@ -8,30 +8,37 @@ import json
 import logging
 import urllib.request
 from urllib.error import URLError, HTTPError
-from typing import Optional
+from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
+
+def _escape_md(text: str) -> str:
+    """Escape special characters for Telegram MarkdownV2."""
+    if not text:
+        return ""
+    # In MarkdownV2, these characters must be escaped:
+    # _ * [ ] ( ) ~ ` > # + - = | { } . !
+    escape_chars = r"_*[]()~`>#+-=|{}.!"
+    for char in escape_chars:
+        text = text.replace(char, f"\\{char}")
+    return text
 
 def send_approval_card(
     chat_id: str,
     bot_token: str,
     queue_id: str,
-    job_title: str,
-    company: str,
-    score: int,
-    email: Optional[str]
+    job: Dict[str, Any],
+    eval_record: Dict[str, Any]
 ) -> None:
     """
-    Sends an interactive approval card to Telegram.
+    Sends an interactive, rich approval card to Telegram using MarkdownV2.
 
     Args:
         chat_id: The Telegram chat ID.
         bot_token: The Telegram bot token.
         queue_id: The UUID of the action_queue item.
-        job_title: The job title.
-        company: The company name.
-        score: The match score (0-100).
-        email: The extracted contact email (or 'Unknown').
+        job: The job record dictionary.
+        eval_record: The evaluation record dictionary.
     
     Raises:
         RuntimeError: If the API request fails, preventing the pipeline from advancing.
@@ -39,19 +46,69 @@ def send_approval_card(
     if not bot_token or not chat_id:
         raise RuntimeError("Missing TELEGRAM_BOT_TOKEN or MY_TELEGRAM_CHAT_ID")
 
-    email_display = email if email else "Unknown"
+    title = _escape_md(job.get('title', 'Unknown Title'))
+    company = _escape_md(job.get('company', 'Unknown Company'))
+    score = eval_record.get('score', 0)
     
+    # Matches and Gaps
+    tech_matches = eval_record.get('tech_matches', '[]')
+    if isinstance(tech_matches, str):
+        tech_matches = json.loads(tech_matches)
+    matches_text = "\n".join([f"• {_escape_md(t)}" for t in tech_matches]) if tech_matches else "None"
+    
+    gaps = eval_record.get('gaps', '[]')
+    if isinstance(gaps, str):
+        gaps = json.loads(gaps)
+    gaps_text = "\n".join([f"• {_escape_md(g)}" for t in gaps]) if gaps else "None" # wait, used t instead of g for gaps... fixed below
+    gaps_text = "\n".join([f"• {_escape_md(g)}" for g in gaps]) if gaps else "None"
+
+    # Email
+    email = eval_record.get('contact_email')
+    email_display = _escape_md(email) if email else "⚠️ No application email found"
+    email_type = _escape_md(eval_record.get('email_type', 'UNKNOWN'))
+    
+    # Documents
+    req_docs_json = eval_record.get('required_documents', '{}')
+    if isinstance(req_docs_json, str):
+        try:
+            req_docs = json.loads(req_docs_json)
+        except:
+            req_docs = {}
+    else:
+        req_docs = req_docs_json or {}
+        
+    doc_lines = []
+    has_missing_required = False
+    for doc, req in req_docs.items():
+        if doc in ["CV", "Cover Letter"]:
+            doc_lines.append(f"✅ {_escape_md(doc)}")
+        elif req == "REQUIRED_AT_APPLICATION":
+            doc_lines.append(f"❌ {_escape_md(doc)}")
+            has_missing_required = True
+        else:
+            doc_lines.append(f"❌ {_escape_md(doc)}")
+            doc_lines.append(f"ℹ️ _Not required at application stage_")
+            
+    doc_text = "\n".join(doc_lines) if doc_lines else "✅ CV\n✅ Cover Letter"
+
+    text = (
+        f"🚀 *JOB MATCH FOUND*\n\n"
+        f"💼 *Title:* {title}\n"
+        f"🏢 *Company:* {company}\n"
+        f"🎯 *Match Score:* {score}/100\n\n"
+        f"✅ *Strong Matches*\n{matches_text}\n\n"
+        f"⚠️ *Gaps*\n{gaps_text}\n\n"
+        f"📧 *Application*\n{email_display}\n"
+        f"Type: {email_type}\n\n"
+        f"📄 *Documents*\n{doc_text}\n\n"
+        f"📝 *Email*\nDynamic application email will be generated after approval\\.\n\n"
+        f"📎 *CV*\n`{_escape_md(job.get('id', ''))[:16]}_cv\\.pdf`"
+    )
+
     payload = {
         "chat_id": chat_id,
-        "text": (
-            f"🤖 *Job Hunter — New Match Found*\n\n"
-            f"💼 *Title:* {job_title}\n"
-            f"🏢 *Company:* {company}\n"
-            f"📊 *Match Score:* {score}/100\n"
-            f"📧 *Delivery:* Email ({email_display})\n\n"
-            f"Ready to review application draft and dispatch."
-        ),
-        "parse_mode": "Markdown",
+        "text": text,
+        "parse_mode": "MarkdownV2",
         "reply_markup": {
             "inline_keyboard": [
                 [

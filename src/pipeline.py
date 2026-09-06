@@ -39,8 +39,10 @@ def phase_generate_tex(db: DatabaseClient, profile_path: str = "profile/profile.
         extraction = run_extraction(job.get('description', ''))
         evaluation_data = {
             'contact_email': extraction.contact_email,
+            'email_type': extraction.email_type.value,
             'min_experience': extraction.min_experience,
             'german_requirement': extraction.german_requirement.value,
+            'required_documents': json.dumps({k: v.value for k, v in extraction.required_documents.items()}),
             'score': 0,
         }
         db.upsert_evaluation(job['id'], evaluation_data)
@@ -124,9 +126,35 @@ def phase_finalize_assets(db: DatabaseClient, output_dir: str = "output"):
             error_msg = f"Missing PDF for job {job_id} at {pdf_path}. Cannot transition to ASSETS_READY."
             logger.error(error_msg)
             raise FileNotFoundError(error_msg)
+            
+        eval_record = db.get_evaluation(job_id)
+        
+        # Hard Gate: Verify contact email
+        if not eval_record.get('contact_email'):
+            logger.warning(f"No contact email found for job {job_id}. Skipping transition to ASSETS_READY.")
+            continue
+            
+        # Hard Gate: Verify required documents
+        req_docs_json = eval_record.get('required_documents', '{}')
+        if isinstance(req_docs_json, str):
+            try:
+                req_docs = json.loads(req_docs_json)
+            except json.JSONDecodeError:
+                req_docs = {}
+        else:
+            req_docs = req_docs_json or {}
+            
+        missing_docs = []
+        for doc, doc_req in req_docs.items():
+            # We generate CV and Cover Letter, so we only lack others (like Degree Certificate)
+            if doc_req == "REQUIRED_AT_APPLICATION" and doc not in ["CV", "Cover Letter"]:
+                missing_docs.append(doc)
+                
+        if missing_docs:
+            logger.warning(f"Missing required documents for job {job_id}: {missing_docs}. Skipping transition to ASSETS_READY.")
+            continue
         
         # Insert application_assets
-        eval_record = db.get_evaluation(job_id)
         cover_letter = eval_record.get('cover_letter_pitch', '')
         
         with db._conn.cursor() as cur:
@@ -174,10 +202,8 @@ def phase_finalize_assets(db: DatabaseClient, output_dir: str = "output"):
                 chat_id=chat_id,
                 bot_token=bot_token,
                 queue_id=queue_id,
-                job_title=job['title'],
-                company=job['company'],
-                score=eval_record.get('score', 0),
-                email=eval_record.get('contact_email')
+                job=job,
+                eval_record=eval_record
             )
         except Exception as e:
             logger.error(f"Failed to send Telegram card for {job_id}: {e}")
