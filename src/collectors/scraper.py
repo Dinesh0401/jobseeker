@@ -1,23 +1,20 @@
 """
 Job Listing Collector for Job Hunter v1.
 
-Collects job postings from configured sources (RSS feeds, APIs, email).
+Collects job postings from Arbeitnow API.
 Deduplicates on URL and inserts new listings as INGESTED.
 
 Spec Reference: Technical_Specification.md §1 (Component 1)
 """
 
-import hashlib
 import logging
 import re
-import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import List, Optional
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 import requests
 
-from src.config import Config
 from src.db.client import DatabaseClient
 
 logger = logging.getLogger(__name__)
@@ -36,20 +33,7 @@ _TRACKING_PARAMS = frozenset({
 
 
 def normalize_url(url: str) -> str:
-    """
-    Normalize a URL for deduplication.
-
-    - Strips tracking parameters (utm_*, fbclid, etc.)
-    - Removes trailing slashes
-    - Lowercases scheme and host
-    - Removes fragments
-
-    Args:
-        url: Raw URL string.
-
-    Returns:
-        Normalized URL string.
-    """
+    """Normalize a URL for deduplication."""
     try:
         parsed = urlparse(url)
 
@@ -77,16 +61,8 @@ def normalize_url(url: str) -> str:
 
 
 # ============================================================
-# RSS Feed Collector
+# API Collectors
 # ============================================================
-
-@dataclass
-class RSSFeedConfig:
-    """Configuration for an RSS feed source."""
-    name: str
-    url: str
-    source_label: str  # e.g., "stackoverflow", "remoteok"
-
 
 @dataclass
 class CollectedJob:
@@ -98,56 +74,58 @@ class CollectedJob:
     description: str
 
 
-def collect_from_rss(feed_config: RSSFeedConfig) -> List[CollectedJob]:
+def _is_relevant_job(title: str, location: str, remote: bool, description: str) -> bool:
     """
-    Collect job listings from an RSS feed.
+    Filter jobs based on target roles and location (Germany / Remote).
+    Target roles: Python, Backend, Software Engineer, AI, ML, Data.
+    """
+    # 1. Check Target Roles
+    target_roles = re.compile(
+        r"\b(python|backend|software|developer|engineer|data|machine learning|ai|ml)\b", 
+        re.IGNORECASE
+    )
+    if not target_roles.search(title):
+        return False
+        
+    # 2. Check Location (Germany or Remote)
+    # Arbeitnow is mostly Germany, but we can explicitly check if location implies another country.
+    # Usually locations are cities like "Berlin", "Munich", or "Remote".
+    location_lower = location.lower()
+    is_germany = any(city in location_lower for city in ["berlin", "munich", "münchen", "hamburg", "frankfurt", "cologne", "köln", "stuttgart", "germany"])
+    
+    if not (is_germany or remote):
+        # We also accept if the description mentions Germany
+        if "germany" not in description.lower():
+            return False
 
-    Args:
-        feed_config: RSS feed configuration.
+    return True
 
-    Returns:
-        List of CollectedJob objects.
+
+def collect_from_arbeitnow_api() -> List[CollectedJob]:
+    """
+    Collect job listings from Arbeitnow API (Germany Job Board).
     """
     jobs: List[CollectedJob] = []
+    url = "https://www.arbeitnow.com/api/job-board-api"
 
     try:
-        response = requests.get(feed_config.url, timeout=30)
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
+        data = response.json()
 
-        root = ET.fromstring(response.text)
+        for item in data.get("data", []):
+            title = item.get("title", "")
+            company = item.get("company_name", "")
+            job_url = item.get("url", "")
+            description = item.get("description", "")
+            location = item.get("location", "")
+            remote = item.get("remote", False)
 
-        # Handle both RSS 2.0 and Atom feeds
-        items = root.findall(".//item") or root.findall(
-            ".//{http://www.w3.org/2005/Atom}entry"
-        )
-
-        for item in items:
-            # RSS 2.0 fields
-            title_el = item.find("title")
-            link_el = item.find("link")
-            desc_el = item.find("description") or item.find("content:encoded")
-
-            # Atom fallbacks
-            if link_el is None:
-                link_el = item.find("{http://www.w3.org/2005/Atom}link")
-            if title_el is None:
-                title_el = item.find("{http://www.w3.org/2005/Atom}title")
-            if desc_el is None:
-                desc_el = item.find("{http://www.w3.org/2005/Atom}content")
-
-            title = title_el.text.strip() if title_el is not None and title_el.text else ""
-            link = (
-                link_el.get("href", "") if link_el is not None and link_el.get("href")
-                else (link_el.text.strip() if link_el is not None and link_el.text else "")
-            )
-            description = desc_el.text.strip() if desc_el is not None and desc_el.text else ""
-
-            if not title or not link:
+            if not title or not job_url:
                 continue
-
-            # Extract company from title if pattern matches "Title at Company"
-            company = _extract_company_from_title(title)
-            normalized_url = normalize_url(link)
+                
+            if not _is_relevant_job(title, location, remote, description):
+                continue
 
             # Strip HTML tags from description
             clean_description = re.sub(r"<[^>]+>", " ", description)
@@ -155,97 +133,55 @@ def collect_from_rss(feed_config: RSSFeedConfig) -> List[CollectedJob]:
 
             jobs.append(
                 CollectedJob(
-                    source=feed_config.source_label,
+                    source="arbeitnow",
                     title=title,
                     company=company,
-                    url=normalized_url,
+                    url=normalize_url(job_url),
                     description=clean_description,
                 )
             )
 
-        logger.info(
-            "Collected %d jobs from RSS feed: %s", len(jobs), feed_config.name
-        )
+        logger.info("Collected %d jobs from Arbeitnow API", len(jobs))
 
     except requests.RequestException as e:
-        logger.error("Failed to fetch RSS feed %s: %s", feed_config.name, e)
-    except ET.ParseError as e:
-        logger.error("Failed to parse RSS feed %s: %s", feed_config.name, e)
+        logger.error("Failed to fetch Arbeitnow API: %s", e)
+    except Exception as e:
+        logger.error("Failed to parse Arbeitnow API: %s", e)
 
     return jobs
-
-
-def _extract_company_from_title(title: str) -> str:
-    """
-    Extract company name from job title patterns.
-
-    Patterns: "Title at Company", "Title - Company", "Title | Company"
-    Falls back to "Unknown" if no pattern matches.
-    """
-    patterns = [
-        re.compile(r"^.+?\s+at\s+(.+)$", re.IGNORECASE),
-        re.compile(r"^.+?\s*[-–—]\s*(.+)$"),
-        re.compile(r"^.+?\s*\|\s*(.+)$"),
-    ]
-    for pattern in patterns:
-        match = pattern.match(title)
-        if match:
-            return match.group(1).strip()
-    return "Unknown"
 
 
 # ============================================================
 # Ingestion Pipeline
 # ============================================================
 
-# Default RSS feeds — extend this list with your sources
-DEFAULT_FEEDS: List[RSSFeedConfig] = [
-    RSSFeedConfig(
-        name="Stack Overflow - Python",
-        url="https://stackoverflow.com/jobs/feed?q=python",
-        source_label="stackoverflow",
-    ),
-    RSSFeedConfig(
-        name="RemoteOK - Developer",
-        url="https://remoteok.com/remote-dev-jobs.rss",
-        source_label="remoteok",
-    ),
-]
-
-
-def run_collection(db: DatabaseClient, feeds: Optional[List[RSSFeedConfig]] = None) -> int:
+def run_collection(db: DatabaseClient) -> int:
     """
     Run the full collection pipeline.
 
-    Collects from all configured RSS feeds, normalizes URLs,
+    Collects from Arbeitnow API, normalizes URLs,
     and inserts new jobs into the database as INGESTED.
 
     Args:
         db: DatabaseClient instance.
-        feeds: Optional list of feed configs. Uses DEFAULT_FEEDS if None.
 
     Returns:
         Number of new jobs inserted.
     """
-    if feeds is None:
-        feeds = DEFAULT_FEEDS
-
     total_inserted = 0
+    logger.info("Collecting from: Arbeitnow API")
+    collected = collect_from_arbeitnow_api()
 
-    for feed in feeds:
-        logger.info("Collecting from: %s", feed.name)
-        collected = collect_from_rss(feed)
-
-        for job in collected:
-            result = db.insert_job(
-                source=job.source,
-                title=job.title,
-                company=job.company,
-                url=job.url,
-                description=job.description,
-            )
-            if result is not None:
-                total_inserted += 1
+    for job in collected:
+        result = db.insert_job(
+            source=job.source,
+            title=job.title,
+            company=job.company,
+            url=job.url,
+            description=job.description,
+        )
+        if result is not None:
+            total_inserted += 1
 
     logger.info("Collection complete. %d new jobs inserted.", total_inserted)
     return total_inserted

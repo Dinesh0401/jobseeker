@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import google.generativeai as genai
+from google import genai
 
 from src.config import GeminiConfig
 from src.evaluators.extraction import ExtractionResult
@@ -122,8 +122,8 @@ class GeminiMatcher:
     """
 
     def __init__(self, config: GeminiConfig, profile_dir: str = "profile"):
-        genai.configure(api_key=config.api_key)
-        self._model = genai.GenerativeModel(config.model)
+        self._client = genai.Client(api_key=config.api_key)
+        self._model_name = config.model
         self._threshold = config.match_threshold
         self._profile = load_profile(profile_dir)
         logger.info(
@@ -174,7 +174,10 @@ class GeminiMatcher:
         # Call Gemini API (NO database transaction should be open here)
         logger.info("Calling Gemini for job: %s", job.get("title", "Unknown"))
         try:
-            response = self._model.generate_content(prompt)
+            response = self._client.models.generate_content(
+                model=self._model_name,
+                contents=prompt,
+            )
             raw_text = response.text.strip()
         except Exception as e:
             logger.error("Gemini API call failed: %s", e)
