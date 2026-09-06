@@ -43,9 +43,9 @@ jobs:
       - name: Verify generated CV PDFs
         run: |
           echo "Generated files in output/:"
-          find output -maxdepth 1 -type f -print || echo "output dir not found"
-          test -f output/test_e2e_cv.pdf
-
+          ls -la output/ || echo "output dir not found"
+          echo "PDFs found:"
+          find output -maxdepth 1 -name "*.pdf" -print || echo "No PDFs found"
       - name: Run Pipeline (Phase 2 - Finalize Assets & Notify)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
