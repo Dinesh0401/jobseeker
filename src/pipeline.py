@@ -126,18 +126,9 @@ def phase_finalize_assets(db: DatabaseClient, output_dir: str = "output"):
             raise FileNotFoundError(error_msg)
         
         # Insert application_assets
-        eval_record = db.get_evaluation(job_id)
+        eval_record = db.get_evaluation(job_id) or {}
         cover_letter = eval_record.get('cover_letter_pitch', '')
-        
-        with db._conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO application_assets (job_id, cv_pdf_path, cover_letter_body)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (job_id) DO UPDATE SET 
-                    cv_pdf_path = EXCLUDED.cv_pdf_path,
-                    cover_letter_body = EXCLUDED.cover_letter_body;
-            """, (job_id, str(pdf_path.absolute()), cover_letter))
-            db._conn.commit()
+        db.upsert_assets(job_id, str(pdf_path.absolute()), cover_letter)
             
         db.transition_state(job_id, 'ASSETS_READY')
         logger.info(f"Assets verified. Transitioned {job_id} to ASSETS_READY.")
@@ -149,24 +140,21 @@ def phase_finalize_assets(db: DatabaseClient, output_dir: str = "output"):
     
     for job in assets_ready:
         job_id = job['id']
-        eval_record = db.get_evaluation(job_id)
-        
-        with db._conn.cursor() as cur:
-            # Idempotency: Create action_queue row and get its ID
-            # Check if one already exists for this job
-            cur.execute("SELECT id FROM action_queue WHERE job_id = %s LIMIT 1", (job_id,))
-            row = cur.fetchone()
-            if row:
-                queue_id = row['id']
-                logger.info(f"action_queue item {queue_id} already exists for job {job_id}")
-            else:
-                cur.execute("""
-                    INSERT INTO action_queue (job_id, telegram_chat_id, status)
-                    VALUES (%s, %s, 'QUEUED') RETURNING id
-                """, (job_id, chat_id))
-                queue_id = cur.fetchone()['id']
-                db._conn.commit()
-                logger.info(f"Created action_queue {queue_id} for job {job_id}")
+        eval_record = db.get_evaluation(job_id) or {}
+        existing = (
+            db.client.table("action_queue")
+            .select("id")
+            .eq("job_id", job_id)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            queue_id = existing[0]['id']
+            logger.info(f"action_queue item {queue_id} already exists for job {job_id}")
+        else:
+            queue_id = db.enqueue_action(job_id, chat_id)['id']
+            logger.info(f"Created action_queue {queue_id} for job {job_id}")
 
         # Send Telegram Card
         try:
