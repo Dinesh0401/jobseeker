@@ -77,8 +77,9 @@ def evaluate_job(
     1. Score the match from 0 to 100 based on skills, experience, location, and language fit.
     2. List technologies that match between the job and candidate.
     3. List gaps where the candidate falls short.
-    4. Provide exactly 2-4 EXACT keys from the Candidate Profile (from experience.json or projects.json) that should be highlighted in a tailored CV. The format MUST be exactly "profile.experience[KEY]" or "profile.projects[KEY]". DO NOT invent bullets. The array must contain ONLY string keys that exist in the JSON.
-    5. Write a 2-3 sentence cover letter pitch customized to this job.
+    4. Provide exactly 1-3 EXACT keys from the Candidate Profile's experience.json that best match this job. DO NOT invent prose. Only output the string value of the "key" field from the JSON.
+    5. Provide exactly 1-2 EXACT keys from the Candidate Profile's projects.json that best match this job. DO NOT invent prose. Only output the string value of the "key" field from the JSON.
+    6. Write a 2-3 sentence cover letter pitch customized to this job.
     
     Output strictly valid JSON:
     {{
@@ -88,7 +89,8 @@ def evaluate_job(
       "contact_email": "<Use email from Deterministic Facts ONLY, or null>",
       "tech_matches": ["list"],
       "gaps": ["list"],
-      "tailored_cv_bullets": ["profile.experience[<KEY>]", "profile.projects[<KEY>]"],
+      "matched_experience_keys": ["<EXACT_EXPERIENCE_KEY_1>"],
+      "matched_project_keys": ["<EXACT_PROJECT_KEY_1>"],
       "cover_letter_pitch": "<Concise 100-word pitch>"
     }}
     """
@@ -113,6 +115,16 @@ def evaluate_job(
                 .strip()
             )
             result = json.loads(raw_text)
+            
+            # Combine keys into tailored_cv_bullets for DB storage
+            exp_keys = result.get("matched_experience_keys", [])
+            proj_keys = result.get("matched_project_keys", [])
+            
+            if isinstance(exp_keys, list) and isinstance(proj_keys, list):
+                result["tailored_cv_bullets"] = exp_keys + proj_keys
+            else:
+                result["tailored_cv_bullets"] = []
+                
             logger.info(
                 "Gemini evaluation: %s at %s -> score=%d, verdict=%s",
                 title, company, result.get("score", 0), result.get("verdict", "UNKNOWN"),
