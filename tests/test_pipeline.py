@@ -69,9 +69,9 @@ def test_missing_pdf_blocks_assets_ready(mock_db, monkeypatch, tmp_path):
     job_id = "job-missing-pdf"
     mock_db.jobs[job_id] = {"id": job_id, "title": "Test", "company": "TestCorp", "state": "MATCHED"}
     mock_db.upsert_evaluation(job_id, {"cover_letter_pitch": "Hello"})
-    
     # Run finalize
-    phase_finalize_assets(mock_db, output_dir=str(tmp_path))
+    with pytest.raises(FileNotFoundError):
+        phase_finalize_assets(mock_db, output_dir=str(tmp_path))
     
     # Assert
     assert mock_db.jobs[job_id]['state'] == "MATCHED", "Job should remain MATCHED if PDF is missing"
