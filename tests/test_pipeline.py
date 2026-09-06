@@ -18,34 +18,37 @@ def mock_db():
             self.assets = {}
             self.transitions = []
             self.inserted_actions = []
-            
-            # For transaction mocking
-            class MockCursor:
+
+            class MockActionQueueQuery:
                 def __init__(self, parent):
                     self.parent = parent
-                    self._last_row = None
-                def __enter__(self): return self
-                def __exit__(self, *args): pass
-                def execute(self, query, params=None):
-                    if "INSERT INTO application_assets" in query:
-                        self.parent.assets[params[0]] = {"pdf": params[1], "cover": params[2]}
-                    elif "SELECT id FROM action_queue WHERE job_id" in query:
-                        found = [a for a in self.parent.actions if a['job_id'] == params[0]]
-                        self._last_row = {"id": found[0]['id']} if found else None
-                    elif "INSERT INTO action_queue" in query:
-                        new_id = "test-queue-id"
-                        self.parent.actions.append({"id": new_id, "job_id": params[0], "status": "QUEUED"})
-                        self.parent.inserted_actions.append(params[0])
-                        self._last_row = {"id": new_id}
-                def fetchone(self):
-                    return self._last_row
-                
-            class MockConn:
-                def __init__(self, parent): self.parent = parent
-                def cursor(self): return MockCursor(self.parent)
-                def commit(self): pass
-                
-            self._conn = MockConn(self)
+                    self._job_id = None
+
+                def select(self, *_args, **_kwargs):
+                    return self
+
+                def eq(self, column, value):
+                    if column == "job_id":
+                        self._job_id = value
+                    return self
+
+                def limit(self, _n):
+                    return self
+
+                def execute(self):
+                    found = [a for a in self.parent.actions if a['job_id'] == self._job_id]
+                    data = [{"id": found[0]['id']}] if found else []
+                    return type("Result", (), {"data": data})()
+
+            class MockSupabaseClient:
+                def __init__(self, parent):
+                    self.parent = parent
+
+                def table(self, name):
+                    assert name == "action_queue"
+                    return MockActionQueueQuery(self.parent)
+
+            self.client = MockSupabaseClient(self)
 
         def get_jobs_by_state(self, state):
             return [j for j in self.jobs.values() if j['state'] == state]
@@ -61,6 +64,15 @@ def mock_db():
         def transition_state(self, job_id, new_state):
             self.jobs[job_id]['state'] = new_state
             self.transitions.append((job_id, new_state))
+
+        def upsert_assets(self, job_id, cv_pdf_path, cover_letter_body):
+            self.assets[job_id] = {"pdf": cv_pdf_path, "cover": cover_letter_body}
+
+        def enqueue_action(self, job_id, chat_id):
+            new_id = "test-queue-id"
+            self.actions.append({"id": new_id, "job_id": job_id, "telegram_chat_id": chat_id, "status": "QUEUED"})
+            self.inserted_actions.append(job_id)
+            return {"id": new_id}
             
     return MockDB()
 
@@ -71,7 +83,8 @@ def test_missing_pdf_blocks_assets_ready(mock_db, monkeypatch, tmp_path):
     mock_db.upsert_evaluation(job_id, {"cover_letter_pitch": "Hello"})
     
     # Run finalize
-    phase_finalize_assets(mock_db, output_dir=str(tmp_path))
+    with pytest.raises(FileNotFoundError):
+        phase_finalize_assets(mock_db, output_dir=str(tmp_path))
     
     # Assert
     assert mock_db.jobs[job_id]['state'] == "MATCHED", "Job should remain MATCHED if PDF is missing"
