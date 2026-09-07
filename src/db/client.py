@@ -13,6 +13,7 @@ Spec Reference: Technical_Specification.md §2, §3
 import hashlib
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -280,6 +281,15 @@ class DatabaseClient:
     # Evaluations
     # ============================================================
 
+    @staticmethod
+    def _extract_missing_evaluation_column(error: Exception) -> Optional[str]:
+        """Return missing job_evaluations column name from a Supabase schema-cache error."""
+        match = re.search(
+            r"Could not find the '([^']+)' column of 'job_evaluations' in the schema cache",
+            str(error),
+        )
+        return match.group(1) if match else None
+
     def upsert_evaluation(self, job_id: str, evaluation: Dict[str, Any]) -> Dict[str, Any]:
         """
         Insert or update an evaluation for a job.
@@ -289,11 +299,32 @@ class DatabaseClient:
             evaluation: Dict with score, method, contact_email, etc.
         """
         data = {"job_id": job_id, **evaluation}
-        result = (
-            self._client.table("job_evaluations")
-            .upsert(data, on_conflict="job_id")
-            .execute()
-        )
+        dropped_columns: List[str] = []
+        while True:
+            try:
+                result = (
+                    self._client.table("job_evaluations")
+                    .upsert(data, on_conflict="job_id")
+                    .execute()
+                )
+                break
+            except Exception as exc:
+                missing_column = self._extract_missing_evaluation_column(exc)
+                if not missing_column or missing_column not in data or missing_column == "job_id":
+                    raise
+                data.pop(missing_column, None)
+                dropped_columns.append(missing_column)
+                logger.warning(
+                    "job_evaluations column '%s' missing in DB schema; retrying upsert without it",
+                    missing_column,
+                )
+
+        if dropped_columns:
+            logger.info(
+                "Upserted evaluation for job %s after dropping unsupported columns: %s",
+                job_id[:12],
+                ", ".join(dropped_columns),
+            )
         logger.info("Upserted evaluation for job %s (score=%s)", job_id[:12], evaluation.get("score"))
         return result.data[0] if result.data else data
 
