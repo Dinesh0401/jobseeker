@@ -118,6 +118,29 @@ serve(async (req) => {
         await editMessage(chatId, messageId,
           payload.callback_query.message.text + "\n\n✅ **APPROVED FOR DISPATCH**"
         )
+        
+        // Instant Dispatch: Trigger GitHub Actions workflow
+        const githubToken = Deno.env.get('GITHUB_TOKEN')
+        if (githubToken) {
+          try {
+            const ghRes = await fetch("https://api.github.com/repos/Dinesh0401/jobseeker/actions/workflows/dispatch.yml/dispatches", {
+              method: "POST",
+              headers: {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": `token ${githubToken}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ ref: "main" })
+            });
+            if (!ghRes.ok) {
+              console.error("GitHub dispatch failed:", await ghRes.text());
+            } else {
+              console.log("GitHub dispatch triggered successfully");
+            }
+          } catch (ghErr) {
+            console.error("GitHub dispatch error:", ghErr);
+          }
+        }
       }
 
     } else if (action === "skip") {
