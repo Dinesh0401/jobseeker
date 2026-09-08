@@ -18,34 +18,49 @@ def mock_db():
             self.assets = {}
             self.transitions = []
             self.inserted_actions = []
+            class MockClientTableSelectEq:
+                def __init__(self, parent, table, column, value):
+                    self.parent = parent
+                    self.table = table
+                    self.value = value
+                def execute(self):
+                    class MockRes:
+                        def __init__(self, data): self.data = data
+                    if self.table == "action_queue":
+                        found = [a for a in self.parent.actions if a['job_id'] == self.value]
+                        return MockRes([{"id": found[0]['id']}] if found else [])
+                    return MockRes([])
+
+            class MockClientTableSelect:
+                def __init__(self, parent, table, cols):
+                    self.parent = parent
+                    self.table = table
+                def eq(self, column, value):
+                    return MockClientTableSelectEq(self.parent, self.table, column, value)
             
-            # For transaction mocking
-            class MockCursor:
+            class MockClientTable:
+                def __init__(self, parent, table):
+                    self.parent = parent
+                    self.table = table
+                def select(self, cols):
+                    return MockClientTableSelect(self.parent, self.table, cols)
+
+            class MockClient:
                 def __init__(self, parent):
                     self.parent = parent
-                    self._last_row = None
-                def __enter__(self): return self
-                def __exit__(self, *args): pass
-                def execute(self, query, params=None):
-                    if "INSERT INTO application_assets" in query:
-                        self.parent.assets[params[0]] = {"pdf": params[1], "cover": params[2]}
-                    elif "SELECT id FROM action_queue WHERE job_id" in query:
-                        found = [a for a in self.parent.actions if a['job_id'] == params[0]]
-                        self._last_row = {"id": found[0]['id']} if found else None
-                    elif "INSERT INTO action_queue" in query:
-                        new_id = "test-queue-id"
-                        self.parent.actions.append({"id": new_id, "job_id": params[0], "status": "QUEUED"})
-                        self.parent.inserted_actions.append(params[0])
-                        self._last_row = {"id": new_id}
-                def fetchone(self):
-                    return self._last_row
-                
-            class MockConn:
-                def __init__(self, parent): self.parent = parent
-                def cursor(self): return MockCursor(self.parent)
-                def commit(self): pass
-                
-            self._conn = MockConn(self)
+                def table(self, name):
+                    return MockClientTable(self.parent, name)
+
+            self.client = MockClient(self)
+
+        def upsert_assets(self, job_id, pdf_path, cover_letter):
+            self.assets[job_id] = {"pdf": pdf_path, "cover": cover_letter}
+
+        def enqueue_action(self, job_id, recipient=None):
+            new_id = "test-queue-id"
+            self.actions.append({"id": new_id, "job_id": job_id, "status": "QUEUED"})
+            self.inserted_actions.append(job_id)
+            return {"id": new_id}
 
         def get_jobs_by_state(self, state):
             return [j for j in self.jobs.values() if j['state'] == state]
@@ -130,3 +145,27 @@ def test_duplicate_telegram_card_prevention(mock_db, monkeypatch, tmp_path):
     # Assert no new action_queue was inserted
     assert len(mock_db.inserted_actions) == 0
     assert mock_db.jobs[job_id]['state'] == "PENDING_APPROVAL"
+
+def test_missing_required_documents_blocks_assets_ready(mock_db, monkeypatch, tmp_path):
+    job_id = "job-missing-degree"
+    # Job description requires degree certificate at application time
+    desc = "Please submit your degree certificate and transcripts along with your application."
+    mock_db.jobs[job_id] = {
+        "id": job_id,
+        "title": "Test",
+        "company": "TestCorp",
+        "state": "MATCHED",
+        "description": desc
+    }
+    mock_db.upsert_evaluation(job_id, {"cover_letter_pitch": "Hello", "score": 85})
+    
+    # Create fake PDF
+    pdf_path = tmp_path / f"{job_id[:16]}_cv.pdf"
+    pdf_path.touch()
+    
+    phase_finalize_assets(mock_db, output_dir=str(tmp_path))
+    
+    # Assert job remains in MATCHED because required document (Degree Certificate) is missing
+    assert mock_db.jobs[job_id]['state'] == "MATCHED"
+    assert (job_id, "ASSETS_READY") not in mock_db.transitions
+

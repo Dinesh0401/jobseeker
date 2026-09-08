@@ -98,7 +98,7 @@ def _resolve_bullet_references(
     """
     Resolve Gemini's tailored_cv_bullets to actual profile entries.
 
-    Bullets are in format: "profile.experience[key]" or "profile.projects[key]"
+    Bullets are direct string keys (e.g., "exp_example").
     Only entries with keys that EXIST in the profile are included.
 
     Returns:
@@ -106,9 +106,6 @@ def _resolve_bullet_references(
     """
     experience_keys: List[str] = []
     project_keys: List[str] = []
-
-    exp_pattern = re.compile(r"profile\.experience\[(\w+)\]")
-    proj_pattern = re.compile(r"profile\.projects\[(\w+)\]")
 
     # Build lookup sets from actual profile data
     valid_exp_keys = {
@@ -120,24 +117,15 @@ def _resolve_bullet_references(
         if entry.get("key")
     }
 
-    for bullet in bullets:
-        key = bullet.strip()
-        
-        # Check experience references
-        exp_match = exp_pattern.search(key)
-        if exp_match:
-            key = exp_match.group(1)
-            
-        proj_match = proj_pattern.search(key)
-        if proj_match:
-            key = proj_match.group(1)
+    for key in bullets:
+        key = key.strip()
 
         if key in valid_exp_keys:
             experience_keys.append(key)
         elif key in valid_proj_keys:
             project_keys.append(key)
         else:
-            logger.warning("CV integrity: Unrecognized or invalid key: '%s' — SKIPPED", bullet)
+            logger.warning("CV integrity: Unrecognized or invalid key: '%s' — SKIPPED", key)
 
     return {
         "experience_keys": experience_keys,

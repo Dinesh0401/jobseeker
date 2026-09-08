@@ -6,6 +6,7 @@ Phase 2 (finalize_assets): Verify PDF -> ASSETS_READY -> Telegram -> PENDING_APP
 """
 
 import argparse
+import base64
 import json
 import logging
 import os
@@ -14,7 +15,7 @@ from pathlib import Path
 from src.config import load_config
 from src.db.client import DatabaseClient
 from src.collectors.scraper import run_collection
-from src.evaluators.extraction import run_extraction
+from src.evaluators.extraction import run_extraction, DocumentRequirement
 from src.evaluators.matcher import evaluate_job
 from src.cv.builder import CVBuilder
 from src.notifications.telegram import send_approval_card
@@ -39,10 +40,8 @@ def phase_generate_tex(db: DatabaseClient, profile_path: str = "profile/profile.
         extraction = run_extraction(job.get('description', ''))
         evaluation_data = {
             'contact_email': extraction.contact_email,
-            'email_type': extraction.email_type.value,
             'min_experience': extraction.min_experience,
             'german_requirement': extraction.german_requirement.value,
-            'required_documents': json.dumps({k: v.value for k, v in extraction.required_documents.items()}),
             'score': 0,
         }
         db.upsert_evaluation(job['id'], evaluation_data)
@@ -127,27 +126,14 @@ def phase_finalize_assets(db: DatabaseClient, output_dir: str = "output"):
             logger.error(error_msg)
             raise FileNotFoundError(error_msg)
             
-        eval_record = db.get_evaluation(job_id)
-        
-        # Hard Gate: Verify contact email
-        if not eval_record.get('contact_email'):
-            logger.warning(f"No contact email found for job {job_id}. Skipping transition to ASSETS_READY.")
-            continue
+        eval_record = db.get_evaluation(job_id) or {}
             
         # Hard Gate: Verify required documents
-        req_docs_json = eval_record.get('required_documents', '{}')
-        if isinstance(req_docs_json, str):
-            try:
-                req_docs = json.loads(req_docs_json)
-            except json.JSONDecodeError:
-                req_docs = {}
-        else:
-            req_docs = req_docs_json or {}
-            
+        extraction = run_extraction(job.get('description', ''))
         missing_docs = []
-        for doc, doc_req in req_docs.items():
+        for doc, doc_req in extraction.required_documents.items():
             # We generate CV and Cover Letter, so we only lack others (like Degree Certificate)
-            if doc_req == "REQUIRED_AT_APPLICATION" and doc not in ["CV", "Cover Letter"]:
+            if doc_req == DocumentRequirement.REQUIRED_AT_APPLICATION and doc not in ["CV", "Cover Letter"]:
                 missing_docs.append(doc)
                 
         if missing_docs:
@@ -157,7 +143,18 @@ def phase_finalize_assets(db: DatabaseClient, output_dir: str = "output"):
         # Insert application_assets
         cover_letter = eval_record.get('cover_letter_pitch', '')
         
-        db.upsert_assets(job_id, str(pdf_path.absolute()), cover_letter)
+        # Read the generated PDF and store as base64 data URI so it persists across GitHub Actions runners
+        with open(pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+        
+        if pdf_bytes:
+            pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+            cv_storage_val = f"data:application/pdf;base64,{pdf_b64}"
+        else:
+            # Fallback for empty mock files during testing
+            cv_storage_val = str(pdf_path.absolute())
+            
+        db.upsert_assets(job_id, cv_storage_val, cover_letter)
             
         db.transition_state(job_id, 'ASSETS_READY')
         logger.info(f"Assets verified. Transitioned {job_id} to ASSETS_READY.")
@@ -169,7 +166,11 @@ def phase_finalize_assets(db: DatabaseClient, output_dir: str = "output"):
     
     for job in assets_ready:
         job_id = job['id']
-        eval_record = db.get_evaluation(job_id)
+        eval_record = db.get_evaluation(job_id) or {}
+        extraction = run_extraction(job.get('description', ''))
+        eval_record['required_documents'] = {k: v.value for k, v in extraction.required_documents.items()}
+        if extraction.email_type:
+            eval_record['email_type'] = extraction.email_type.value
         
         # Idempotency: Create action_queue row and get its ID
         # Check if one already exists for this job

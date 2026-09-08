@@ -15,6 +15,7 @@ Invariants:
   - Job state transitions use transition_job_state() PG function.
 """
 
+import base64
 import os
 import logging
 import smtplib
@@ -91,7 +92,7 @@ def dispatch_approved_applications():
                 JOIN job_evaluations e ON j.id = e.job_id
                 JOIN application_assets a ON j.id = a.job_id
                 WHERE q.status = 'APPROVED_FOR_DISPATCH'
-                  AND e.method = 'EMAIL'
+                  AND (e.method = 'EMAIL' OR (e.contact_email IS NOT NULL AND e.contact_email != ''))
                 LIMIT 5
                 FOR UPDATE SKIP LOCKED;
             """)
@@ -127,7 +128,22 @@ def dispatch_approved_applications():
                     conn.commit()
                     continue
                     
-                if not cv_path or not os.path.exists(cv_path):
+                # Support both base64 data URI and local file path
+                pdf_bytes = None
+                if cv_path:
+                    if cv_path.startswith("data:application/pdf;base64,"):
+                        try:
+                            pdf_bytes = base64.b64decode(cv_path.split(",", 1)[1])
+                        except Exception as e:
+                            logger.error("Failed to decode base64 PDF for %s: %s", job_id, e)
+                    elif os.path.exists(cv_path):
+                        try:
+                            with open(cv_path, "rb") as f:
+                                pdf_bytes = f.read()
+                        except Exception as e:
+                            logger.error("Failed to read CV PDF file at %s: %s", cv_path, e)
+
+                if not pdf_bytes:
                     logger.error("Safety Gate Failed: Missing CV PDF for job %s. Marking FAILED.", job_id)
                     cur.execute("UPDATE action_queue SET status = 'FAILED' WHERE id = %s", (queue_id,))
                     cur.execute("UPDATE jobs SET state = 'APPROVED' WHERE id = %s AND state = 'DISPATCHING'", (job_id,))
@@ -195,14 +211,13 @@ def dispatch_approved_applications():
                     msg.attach(MIMEText(email_body, "plain"))
 
                     # Attach CV PDF
-                    with open(cv_path, "rb") as f:
-                        attach = MIMEApplication(f.read(), _subtype="pdf")
-                        attach.add_header(
+                    attach = MIMEApplication(pdf_bytes, _subtype="pdf")
+                    attach.add_header(
                             "Content-Disposition",
                             "attachment",
                             filename="Dinesh_SJ_Resume.pdf",
                         )
-                        msg.attach(attach)
+                    msg.attach(attach)
 
                     # 5. Send via SMTP_SSL
                     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:

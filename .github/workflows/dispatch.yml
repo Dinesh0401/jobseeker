@@ -21,6 +21,7 @@ jobs:
       - name: Execute Dispatcher
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python -c "from src.dispatchers.gmail import dispatch_approved_applications; dispatch_approved_applications()"

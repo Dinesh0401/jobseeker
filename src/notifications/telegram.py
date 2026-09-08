@@ -59,13 +59,28 @@ def send_approval_card(
     gaps = eval_record.get('gaps', '[]')
     if isinstance(gaps, str):
         gaps = json.loads(gaps)
-    gaps_text = "\n".join([f"• {_escape_md(g)}" for t in gaps]) if gaps else "None" # wait, used t instead of g for gaps... fixed below
     gaps_text = "\n".join([f"• {_escape_md(g)}" for g in gaps]) if gaps else "None"
 
     # Email
     email = eval_record.get('contact_email')
     email_display = _escape_md(email) if email else "⚠️ No application email found"
     email_type = _escape_md(eval_record.get('email_type', 'UNKNOWN'))
+    
+    if email:
+        email_section = f"📧 *Application*\n{email_display}\nType: {email_type}\n\n"
+        email_note = "📝 *Email*\nDynamic application email will be generated after approval\\.\n\n"
+        buttons = [
+            {"text": "✅ Approve", "callback_data": f"approve:{queue_id}"},
+            {"text": "❌ Skip", "callback_data": f"skip:{queue_id}"}
+        ]
+    else:
+        job_url = job.get('url', '')
+        # Telegram MarkdownV2 requires special escaping for URLs? Actually just don't escape it inside the () of [text](url).
+        email_section = f"📧 *Application*\n{email_display}\n🌐 *Application URL:* [Apply here]({job_url})\n\n"
+        email_note = "⚠️ *Manual application required*\\.\n\n"
+        buttons = [
+            {"text": "✅ Applied Manually / Dismiss", "callback_data": f"skip:{queue_id}"}
+        ]
     
     # Documents
     req_docs_json = eval_record.get('required_documents', '{}')
@@ -98,10 +113,9 @@ def send_approval_card(
         f"🎯 *Match Score:* {score}/100\n\n"
         f"✅ *Strong Matches*\n{matches_text}\n\n"
         f"⚠️ *Gaps*\n{gaps_text}\n\n"
-        f"📧 *Application*\n{email_display}\n"
-        f"Type: {email_type}\n\n"
+        f"{email_section}"
         f"📄 *Documents*\n{doc_text}\n\n"
-        f"📝 *Email*\nDynamic application email will be generated after approval\\.\n\n"
+        f"{email_note}"
         f"📎 *CV*\n`{_escape_md(job.get('id', ''))[:16]}_cv\\.pdf`"
     )
 
@@ -111,10 +125,7 @@ def send_approval_card(
         "parse_mode": "MarkdownV2",
         "reply_markup": {
             "inline_keyboard": [
-                [
-                    {"text": "✅ Approve", "callback_data": f"approve:{queue_id}"},
-                    {"text": "❌ Skip", "callback_data": f"skip:{queue_id}"}
-                ]
+                buttons
             ]
         }
     }
