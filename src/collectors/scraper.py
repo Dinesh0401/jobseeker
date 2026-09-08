@@ -79,9 +79,9 @@ def _is_relevant_job(title: str, location: str, remote: bool, description: str) 
     Filter jobs based on target roles and location (Germany / Remote).
     Target roles: Python, Backend, Software Engineer, AI, ML, Data.
     """
-    # 1. Check Target Roles (Expanded for freelance & interns)
+    # 1. Check Target Roles
     target_roles = re.compile(
-        r"\b(python|backend|software|developer|engineer|data|machine learning|ai|ml|freelance|freelancer|intern|internship|werkstudent|contract)\b", 
+        r"\b(python|backend|software|developer|engineer|data|machine learning|ai|ml)\b", 
         re.IGNORECASE
     )
     if not target_roles.search(title):

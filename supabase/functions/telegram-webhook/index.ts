@@ -143,6 +143,26 @@ serve(async (req) => {
         }
       }
 
+    } else if (action === "manual") {
+      // Mark queue item done, transition job to SUBMITTED
+      const { data } = await supabase
+        .from('action_queue')
+        .update({ status: 'DONE' })
+        .eq('id', queueId)
+        .eq('status', 'QUEUED')
+        .select()
+
+      if (data && data.length > 0) {
+        await supabase.rpc('transition_job_state', {
+          p_job_id: data[0].job_id,
+          p_new_state: 'SUBMITTED'
+        })
+      }
+
+      await answerCallback(callbackQueryId, "✅ Marked as Manual")
+      await editMessage(chatId, messageId,
+        payload.callback_query.message.text + "\n\n✅ **MANUAL APPLICATION SUBMITTED**"
+      )
     } else if (action === "skip") {
       // Mark queue item done, transition job to REJECTED
       const { data } = await supabase

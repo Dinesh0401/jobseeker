@@ -79,7 +79,8 @@ def send_approval_card(
         email_section = f"📧 *Application*\n{email_display}\n🌐 *Application URL:* [Apply here]({job_url})\n\n"
         email_note = "⚠️ *Manual application required*\\.\n\n"
         buttons = [
-            {"text": "✅ Applied Manually / Dismiss", "callback_data": f"skip:{queue_id}"}
+            {"text": "✅ Applied Manually", "callback_data": f"manual:{queue_id}"},
+            {"text": "❌ Dismiss", "callback_data": f"skip:{queue_id}"}
         ]
     
     # Documents
