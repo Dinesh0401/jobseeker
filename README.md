@@ -81,7 +81,7 @@ jobseeker/
 ├── requirements.txt
 ├── pytest.ini
 └── README.md
-```
+``` 
 
 ## Milestones
 
