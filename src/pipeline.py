@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 
 from src.config import load_config
-from src.db.client import DatabaseClient
+from src.db.client import DatabaseClient, InvalidStateTransition
 from src.collectors.scraper import run_collection
 from src.evaluators.extraction import run_extraction, DocumentRequirement
 from src.evaluators.matcher import evaluate_job
@@ -45,7 +45,10 @@ def phase_generate_tex(db: DatabaseClient, profile_path: str = "profile/profile.
             'score': 0,
         }
         db.upsert_evaluation(job['id'], evaluation_data)
-        db.transition_state(job['id'], 'EVALUATED')
+        try:
+            db.transition_state(job['id'], 'EVALUATED')
+        except InvalidStateTransition as e:
+            logger.warning(f"Skipping INGESTED->EVALUATED for {job['id']}: {e}")
 
     # 3. Run Gemini matcher on EVALUATED jobs
     with open(profile_path, "r", encoding="utf-8") as f:
@@ -81,11 +84,17 @@ def phase_generate_tex(db: DatabaseClient, profile_path: str = "profile/profile.
         })
 
         if result.get('score', 0) >= match_threshold and result.get('verdict') != 'SKIP':
-            db.transition_state(job['id'], 'MATCHED')
-            logger.info(f"MATCHED: {job['title']} at {job['company']} (score={result.get('score')})")
+            try:
+                db.transition_state(job['id'], 'MATCHED')
+                logger.info(f"MATCHED: {job['title']} at {job['company']} (score={result.get('score')})")
+            except InvalidStateTransition as e:
+                logger.warning(f"Skipping MATCHED transition for {job['id']}: {e}")
         else:
-            db.transition_state(job['id'], 'REJECTED')
-            logger.info(f"REJECTED: {job['title']} at {job['company']} (score={result.get('score', 0)})")
+            try:
+                db.transition_state(job['id'], 'REJECTED')
+                logger.info(f"REJECTED: {job['title']} at {job['company']} (score={result.get('score', 0)})")
+            except InvalidStateTransition as e:
+                logger.warning(f"Skipping REJECTED transition for {job['id']}: {e}")
 
     # 4. Generate .tex CVs for MATCHED jobs
     matched = db.get_jobs_by_state('MATCHED')
