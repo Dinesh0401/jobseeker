@@ -29,32 +29,6 @@ from src.db.client import get_connection
 logger = logging.getLogger(__name__)
 
 
-def _recover_stale_executing(conn):
-    """
-    Recover EXECUTING items that are older than 10 minutes.
-
-    These are orphans from a previous run that crashed after
-    SMTP send but before the DONE commit (uncertain-send case).
-    They are reverted to APPROVED_FOR_DISPATCH for re-evaluation.
-    """
-    with conn.cursor() as cur:
-        cur.execute("""
-            UPDATE action_queue
-            SET status = 'APPROVED_FOR_DISPATCH'
-            WHERE status = 'EXECUTING'
-              AND created_at < NOW() - INTERVAL '10 minutes'
-            RETURNING id;
-        """)
-        recovered = cur.fetchall()
-        if recovered:
-            conn.commit()
-            logger.warning(
-                "Recovered %d stale EXECUTING items: %s",
-                len(recovered),
-                [r["id"] for r in recovered],
-            )
-
-
 def dispatch_approved_applications():
     """
     Idempotent worker for SMTP dispatch.
@@ -71,9 +45,6 @@ def dispatch_approved_applications():
     conn = get_connection()
 
     try:
-        # Step 0: Recover any orphaned EXECUTING items
-        _recover_stale_executing(conn)
-
         with conn.cursor() as cur:
             # 1. Fetch up to 5 APPROVED items with row-level lock
             # 1. Fetch up to 5 APPROVED items with row-level lock
@@ -92,6 +63,7 @@ def dispatch_approved_applications():
                 JOIN job_evaluations e ON j.id = e.job_id
                 JOIN application_assets a ON j.id = a.job_id
                 WHERE q.status = 'APPROVED_FOR_DISPATCH'
+                  AND j.state = 'APPROVED'
                   AND (e.method = 'EMAIL' OR (e.contact_email IS NOT NULL AND e.contact_email != ''))
                 LIMIT 5
                 FOR UPDATE SKIP LOCKED;
