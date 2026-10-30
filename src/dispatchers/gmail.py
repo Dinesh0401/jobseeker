@@ -30,6 +30,31 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
+
+def _recover_stale_executing(cur) -> int:
+    """
+    Recover action_queue items stuck in EXECUTING for > 10 minutes.
+    Reverts action_queue to APPROVED_FOR_DISPATCH and job to APPROVED.
+    """
+    cur.execute("""
+        UPDATE action_queue
+        SET status = 'APPROVED_FOR_DISPATCH'
+        WHERE status = 'EXECUTING'
+          AND created_at < NOW() - INTERVAL '10 minutes'
+        RETURNING id, job_id;
+    """)
+    recovered = cur.fetchall()
+    for item in recovered:
+        logger.warning(
+            "Recovered stale EXECUTING action_queue item: %s (job: %s)",
+            item["id"], item["job_id"],
+        )
+        cur.execute(
+            "UPDATE jobs SET state = 'APPROVED' WHERE id = %s AND state = 'DISPATCHING'",
+            (item["job_id"],),
+        )
+    return len(recovered)
+
 def dispatch_approved_applications():
     """
     Idempotent worker for SMTP dispatch.
@@ -43,10 +68,23 @@ def dispatch_approved_applications():
     7. On definite failure: reverts to APPROVED_FOR_DISPATCH.
     8. On timeout (uncertain): keeps EXECUTING for manual review.
     """
+    # Safety Gate: Block dispatch if candidate profile has placeholders
+    try:
+        from src.profiles.validator import assert_profile_ready_for_dispatch, ProfileValidationError
+        assert_profile_ready_for_dispatch("profile")
+    except ProfileValidationError as e:
+        logger.error("SAFETY GATE: Real application dispatch blocked because candidate profile is incomplete: %s", e)
+        return
+
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
+            # 0. Recover stale executing orphans
+            recovered_count = _recover_stale_executing(cur)
+            if recovered_count > 0:
+                conn.commit()
+                logger.info("Recovered %d stale executing tasks.", recovered_count)
             # 1. Fetch up to 5 APPROVED items with row-level lock
             # 1. Fetch up to 5 APPROVED items with row-level lock
             cur.execute("""
@@ -79,7 +117,7 @@ def dispatch_approved_applications():
 
             from google import genai
             import json
-            from src.matcher.gemini import load_profile
+            from src.profiles.loader import load_profile_as_dict as load_profile
             
             client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
             profile = load_profile("profile")

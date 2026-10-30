@@ -84,9 +84,10 @@ _EXCLUDED_DOMAINS = frozenset({
 })
 
 
-def extract_email(text: str) -> Tuple[Optional[str], EmailType]:
+def extract_email(text: str) -> Optional[str]:
     """
-    Extract and classify the best contact email from text.
+    Extract the best contact email from text, excluding no-reply and test domains.
+    Returns the email string or None.
     """
     emails = []
     for match in _EMAIL_PATTERN.finditer(text):
@@ -99,25 +100,43 @@ def extract_email(text: str) -> Tuple[Optional[str], EmailType]:
         emails.append(email)
 
     if not emails:
-        return None, EmailType.UNKNOWN
+        return None
 
     classified = []
     for e in emails:
         local_part = e.split("@")[0]
         if any(kw in local_part for kw in ["apply", "application", "bewerbung"]):
-            classified.append((e, EmailType.APPLICATION, 1))
+            classified.append((e, 1))
         elif "recruit" in local_part:
-            classified.append((e, EmailType.RECRUITER, 2))
+            classified.append((e, 2))
         elif local_part == "hr" or "humanresources" in local_part:
-            classified.append((e, EmailType.HR, 2))
+            classified.append((e, 2))
         elif any(kw in local_part for kw in ["career", "job", "karriere"]):
-            classified.append((e, EmailType.CAREERS, 3))
+            classified.append((e, 3))
         else:
-            classified.append((e, EmailType.UNKNOWN, 4))
+            classified.append((e, 4))
 
     # Sort by priority (1 is highest)
-    classified.sort(key=lambda x: x[2])
-    return classified[0][0], classified[0][1]
+    classified.sort(key=lambda x: x[1])
+    return classified[0][0]
+
+
+def classify_email_type(email: Optional[str]) -> EmailType:
+    """Classify the type of the extracted email."""
+    if not email:
+        return EmailType.UNKNOWN
+
+    local_part = email.split("@")[0].lower()
+    if any(kw in local_part for kw in ["apply", "application", "bewerbung"]):
+        return EmailType.APPLICATION
+    elif "recruit" in local_part:
+        return EmailType.RECRUITER
+    elif local_part in ["hr", "humanresources"] or "hr@" in email or "humanresources" in local_part:
+        return EmailType.HR
+    elif any(kw in local_part for kw in ["career", "job", "karriere"]):
+        return EmailType.CAREERS
+    else:
+        return EmailType.UNKNOWN
 
 
 # ============================================================
@@ -164,8 +183,9 @@ def extract_required_documents(text: str) -> Dict[str, DocumentRequirement]:
 # ============================================================
 
 _YOE_PATTERNS = [
+    # Range patterns first so lower bound is matched: "3-5 years" -> 3
     re.compile(
-        r"(\d{1,2})\+?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:experience|exp(?:erience)?|berufserfahrung)",
+        r"(\d{1,2})\s*[-–—]\s*\d{1,2}\s*(?:years?|yrs?|jahre)",
         re.IGNORECASE,
     ),
     re.compile(
@@ -173,7 +193,7 @@ _YOE_PATTERNS = [
         re.IGNORECASE,
     ),
     re.compile(
-        r"(\d{1,2})\s*[-–—]\s*\d{1,2}\s*(?:years?|yrs?|jahre)",
+        r"(\d{1,2})\+?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:experience|exp(?:erience)?|berufserfahrung)",
         re.IGNORECASE,
     ),
     re.compile(
@@ -200,7 +220,7 @@ def extract_years_experience(text: str) -> Optional[int]:
 _GERMAN_MANDATORY = [
     re.compile(r"\b(?:german|deutsch)\b.*\b(?:required|mandatory|must|essential|erforderlich|zwingend|fluent|flie[ßs]end|native|muttersprach|c[12])\b", re.IGNORECASE),
     re.compile(r"\b(?:required|mandatory|must|essential|erforderlich|fluent|flie[ßs]end|native|muttersprach|c[12])\b.*\b(?:german|deutsch)\b", re.IGNORECASE),
-    re.compile(r"\b(?:deutschkenntnisse|muttersprachlich|verhandlungssicher(?:es?)?\s+deutsch)\b", re.IGNORECASE),
+    re.compile(r"\b(?:sehr\s+gute\s+deutschkenntnisse|muttersprachlich|verhandlungssicher(?:es?)?\s+deutsch)\b", re.IGNORECASE),
 ]
 
 _GERMAN_PREFERRED = [
@@ -210,14 +230,34 @@ _GERMAN_PREFERRED = [
 ]
 
 _GERMAN_OPTIONAL = [
+    re.compile(r"\b(?:basic|beginner|a[12]|grundkenntnisse|nice\s+to\s+have)\b.*\b(?:german|deutsch)\b", re.IGNORECASE),
     re.compile(r"\b(?:german|deutsch)\b.*\b(?:basic|beginner|a[12]|grundkenntnisse|nice\s+to\s+have)\b", re.IGNORECASE),
-    re.compile(r"\b(?:basic|beginner|a[12]|grundkenntnisse)\b.*\b(?:german|deutsch)\b", re.IGNORECASE),
 ]
 
 def detect_german_requirement(text: str) -> GermanRequirement:
-    if any(p.search(text) for p in _GERMAN_MANDATORY): return GermanRequirement.MANDATORY_C1_PLUS
-    if any(p.search(text) for p in _GERMAN_PREFERRED): return GermanRequirement.PREFERRED_B1_B2
-    if any(p.search(text) for p in _GERMAN_OPTIONAL): return GermanRequirement.OPTIONAL_A1_A2
+    if not text or not text.strip():
+        return GermanRequirement.UNKNOWN
+
+    has_preferred_not_required = bool(re.search(r"preferred\s+but\s+not\s+required", text, re.IGNORECASE))
+    
+    is_mandatory = False
+    for p in _GERMAN_MANDATORY:
+        if p.search(text):
+            # If matched because of 'required' but it was 'preferred but not required', check if another mandatory signal exists
+            if has_preferred_not_required and not re.search(r"\b(fluent|flie[ßs]end|c[12]|muttersprach|verhandlungssicher)\b", text, re.IGNORECASE):
+                continue
+            is_mandatory = True
+            break
+
+    if is_mandatory:
+        return GermanRequirement.MANDATORY_C1_PLUS
+
+    if any(p.search(text) for p in _GERMAN_PREFERRED) or has_preferred_not_required:
+        return GermanRequirement.PREFERRED_B1_B2
+
+    if any(p.search(text) for p in _GERMAN_OPTIONAL):
+        return GermanRequirement.OPTIONAL_A1_A2
+
     return GermanRequirement.UNKNOWN
 
 
@@ -229,7 +269,8 @@ def run_extraction(text: str) -> ExtractionResult:
     """
     Run the full deterministic extraction pipeline on a job description.
     """
-    email, email_type = extract_email(text)
+    email = extract_email(text)
+    email_type = classify_email_type(email)
     
     return ExtractionResult(
         contact_email=email,

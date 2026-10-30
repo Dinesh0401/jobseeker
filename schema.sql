@@ -277,7 +277,8 @@ BEGIN
         WHEN v_current = 'PENDING_APPROVAL'
              AND p_new_state IN (
                  'APPROVED',
-                 'REJECTED'
+                 'REJECTED',
+                 'SUBMITTED'
              )
         THEN TRUE
 

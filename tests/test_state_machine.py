@@ -62,6 +62,7 @@ class TestValidTransitions:
             ("ASSETS_READY", "PENDING_APPROVAL"),
             ("PENDING_APPROVAL", "APPROVED"),
             ("PENDING_APPROVAL", "REJECTED"),
+            ("PENDING_APPROVAL", "SUBMITTED"),
             ("APPROVED", "DISPATCHING"),
             ("DISPATCHING", "SENT"),
             ("DISPATCHING", "SUBMITTED"),
