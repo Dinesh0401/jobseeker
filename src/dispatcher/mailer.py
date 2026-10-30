@@ -250,7 +250,7 @@ class Dispatcher:
         if not evaluation or not evaluation.get("contact_email"):
             logger.error("No contact email for job %s", job_id[:12])
             self._db.update_queue_status(queue_id, "FAILED")
-            self._db.transition_state(job_id, "FAILED")
+            self._db.transition_state(job_id, "REJECTED")
             return False
 
         contact_email = evaluation["contact_email"]
@@ -301,7 +301,7 @@ class Dispatcher:
             return True
         else:
             self._db.update_queue_status(queue_id, "FAILED")
-            self._db.transition_state(job_id, "FAILED")
+            self._db.transition_state(job_id, "REJECTED")
             logger.error(
                 "❌ Failed to dispatch to %s after %d attempts",
                 contact_email, self._dispatch.retry_max,
