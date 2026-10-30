@@ -35,6 +35,7 @@ jobs:
         run: python -m src.pipeline --phase generate_tex
 
       - name: Compile LaTeX CVs
+        if: ${{ hashFiles('output/*.tex') != '' }}
         uses: xu-cheng/latex-action@v3
         with:
           root_file: output/*.tex
@@ -46,6 +47,7 @@ jobs:
           ls -la output/ || echo "output dir not found"
           echo "PDFs found:"
           find output -maxdepth 1 -name "*.pdf" -print || echo "No PDFs found"
+
       - name: Run Pipeline (Phase 2 - Finalize Assets & Notify)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -58,7 +60,4 @@ jobs:
           GMAIL_SENDER_ADDRESS: ${{ secrets.GMAIL_SENDER_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python -m src.pipeline --phase finalize_assets
-# trigger update
-# trigger update
-# trigger update
-# trigger update
+
