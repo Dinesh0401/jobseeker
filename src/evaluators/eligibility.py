@@ -219,3 +219,4 @@ def classify_eligibility(
         visa_sponsorship=visa_sponsorship,
         relocation_available=relocation_available,
     )
+

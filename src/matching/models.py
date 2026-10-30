@@ -51,3 +51,4 @@ class MultiDimensionalEvaluationResult(BaseModel):
     contact_email: Optional[str] = None
     email_type: Optional[str] = None
     evaluator_version: str = "v2.0-multi-dimensional"
+

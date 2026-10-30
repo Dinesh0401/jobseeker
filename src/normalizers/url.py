@@ -49,3 +49,4 @@ def normalize_url(url: str) -> str:
         return urlunparse((scheme, netloc, path, parsed.params, query, ""))
     except Exception:
         return url.strip()
+

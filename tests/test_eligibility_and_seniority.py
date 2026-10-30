@@ -117,3 +117,4 @@ def test_language_english_only_allowed():
     res = classify_languages(desc)
     assert res.category == LanguageCategory.ENGLISH_ONLY
     assert res.is_immediately_eligible is True
+

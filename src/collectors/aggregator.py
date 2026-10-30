@@ -118,3 +118,4 @@ class JobCollectorAggregator:
             report.duplicates_skipped,
         )
         return report
+

@@ -76,3 +76,4 @@ class RunSummary:
 
     def print_report(self) -> None:
         logger.info(self.to_markdown())
+

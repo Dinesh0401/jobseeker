@@ -53,3 +53,4 @@ def validate_compiled_pdf(pdf_path: Path, min_bytes: int = 2048) -> None:
         raise PDFValidationError(errors)
 
     logger.info("PDF %s passed integrity validation (%d bytes)", pdf_path.name, size)
+

@@ -277,3 +277,4 @@ Output ONLY valid JSON matching this schema:
                 contact_email=extraction.contact_email,
                 email_type=extraction.email_type.value if extraction.email_type else None,
             )
+

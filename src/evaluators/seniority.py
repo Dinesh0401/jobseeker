@@ -104,3 +104,4 @@ def classify_seniority(title: str, min_years: Optional[int], description: str = 
         min_years=None,
         is_early_career_match=True,  # Kept open for LLM evaluation
     )
+

@@ -93,3 +93,4 @@ class GreenhousePublicAdapter(JobSourceAdapter):
 
         logger.info("GreenhousePublicAdapter fetched %d jobs", len(jobs))
         return jobs
+

@@ -85,3 +85,4 @@ def validate_tex_content(tex_content: str, profile: CandidateProfile) -> List[st
         errors.append(f"Candidate email '{profile.email}' is missing from document header.")
 
     return errors
+

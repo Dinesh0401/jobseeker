@@ -95,3 +95,4 @@ def classify_languages(text: str) -> LanguageAssessment:
             is_immediately_eligible=True,
             requires_future_learning=False,
         )
+
