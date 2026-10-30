@@ -218,9 +218,9 @@ def extract_years_experience(text: str) -> Optional[int]:
 # ============================================================
 
 _GERMAN_MANDATORY = [
-    re.compile(r"\b(?:german|deutsch)\b.*\b(?:required|mandatory|must|essential|erforderlich|zwingend|fluent|flie[ßs]end|native|muttersprach|c[12])\b", re.IGNORECASE),
-    re.compile(r"\b(?:required|mandatory|must|essential|erforderlich|fluent|flie[ßs]end|native|muttersprach|c[12])\b.*\b(?:german|deutsch)\b", re.IGNORECASE),
-    re.compile(r"\b(?:sehr\s+gute\s+deutschkenntnisse|muttersprachlich|verhandlungssicher(?:es?)?\s+deutsch)\b", re.IGNORECASE),
+    re.compile(r"\b(?:german|deutsch\w*)\b.*\b(?:required|mandatory|must|essential|erforderlich|zwingend|fluent|flie[ßs]end|native|muttersprach|c[12])\b", re.IGNORECASE),
+    re.compile(r"\b(?:required|mandatory|must|essential|erforderlich|fluent|flie[ßs]end|native|muttersprach|c[12])\b.*\b(?:german|deutsch\w*)\b", re.IGNORECASE),
+    re.compile(r"\b(?:sehr\s+gute\s+deutschkenntnisse|muttersprachlich|verhandlungssicher\w*)\b", re.IGNORECASE),
 ]
 
 _GERMAN_PREFERRED = [
