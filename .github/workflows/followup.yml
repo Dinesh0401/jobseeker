@@ -81,10 +81,10 @@ jobs:
                       req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
                       urllib.request.urlopen(req, timeout=10)
 
-                      # Transition to FOLLOW_UP state
+                      # Transition to FOLLOW_UP state via PG function
                       for row in stale:
                           cur.execute(
-                              \"UPDATE jobs SET state = 'FOLLOW_UP' WHERE id = %s AND state = 'SENT'\",
+                              \"SELECT transition_job_state(%s, 'FOLLOW_UP'::application_state)\",
                               (row['id'],)
                           )
                       conn.commit()
