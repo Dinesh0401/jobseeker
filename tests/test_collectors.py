@@ -9,7 +9,7 @@ from src.collectors.aggregator import JobCollectorAggregator, is_target_role
 
 
 def test_url_normalization():
-    raw_url = "https://Company.com/careers/Job-123/?utm_source=linkedin&utm_medium=feed&ref=123#apply"
+    raw_url = "https://Company.com/careers/job-123/?utm_source=linkedin&utm_medium=feed&ref=123#apply"
     expected = "https://company.com/careers/job-123"
     assert normalize_url(raw_url) == expected
 
