@@ -5,7 +5,7 @@ Pydantic schemas and result models for Multi-Dimensional Matching Engine.
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-from src.evaluators.eligibility import EligibilityCategory
+from src.evaluators.eligibility import EligibilityCategory, ActionabilityState
 from src.evaluators.languages import LanguageCategory
 from src.evaluators.seniority import SeniorityTier
 
@@ -31,9 +31,10 @@ class MultiDimensionalEvaluationResult(BaseModel):
     language_compatibility_score: int = Field(..., ge=0, le=100)
     overall_match_score: int = Field(..., ge=0, le=100)
     
-    verdict: str  # APPLY, REVIEW, or REJECT
+    verdict: str  # APPLY, REVIEW, REJECT, or HOLD
     hard_gate_passed: bool
     hard_gate_failures: List[str] = Field(default_factory=list)
+    actionability: ActionabilityState = ActionabilityState.INELIGIBLE
     
     eligibility_category: EligibilityCategory
     language_category: LanguageCategory

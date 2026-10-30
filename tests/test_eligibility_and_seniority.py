@@ -4,6 +4,7 @@ Unit tests for international eligibility, seniority, and language requirements.
 
 from src.evaluators.eligibility import (
     EligibilityCategory,
+    ActionabilityState,
     classify_eligibility,
 )
 from src.evaluators.seniority import (
@@ -23,6 +24,7 @@ def test_worldwide_remote_eligibility():
     res = classify_eligibility("Junior AI Engineer", "Anywhere", desc, is_remote=True)
     assert res.category == EligibilityCategory.WORLDWIDE_REMOTE
     assert res.can_apply_from_india is True
+    assert res.actionability == ActionabilityState.CONFIRMED_ELIGIBLE
 
 
 def test_india_eligible_remote():
@@ -30,6 +32,39 @@ def test_india_eligible_remote():
     res = classify_eligibility("Python Developer", "India", desc, is_remote=True)
     assert res.category == EligibilityCategory.INDIA_ELIGIBLE_REMOTE
     assert res.can_apply_from_india is True
+    assert res.actionability == ActionabilityState.CONFIRMED_ELIGIBLE
+
+
+def test_india_positive_mention_not_excluded():
+    desc = "We are remote worldwide. India team members are welcome to apply."
+    res = classify_eligibility("Junior AI Engineer", "Remote", desc, is_remote=True)
+    assert res.can_apply_from_india is True
+    assert res.actionability == ActionabilityState.CONFIRMED_ELIGIBLE
+
+
+def test_india_explicit_exclusions_regression():
+    exclusion_cases = [
+        "Worldwide remote, but cannot hire in India.",
+        "Remote worldwide, excluding India.",
+        "Not open to candidates based in India.",
+        "We cannot employ residents of India.",
+        "Applicants must not be located in India.",
+        "Unfortunately, India is not an eligible hiring country.",
+    ]
+    for desc in exclusion_cases:
+        res = classify_eligibility("Junior AI Engineer", "Worldwide", desc, is_remote=True)
+        assert res.category == EligibilityCategory.COUNTRY_RESTRICTED, f"Failed on: {desc}"
+        assert res.can_apply_from_india is False, f"Failed on: {desc}"
+        assert res.actionability == ActionabilityState.INELIGIBLE, f"Failed on: {desc}"
+
+
+def test_conflicting_worldwide_and_india_exclusion():
+    # Worldwide remote wording must be overridden by negative India restriction
+    desc = "Work from anywhere in the world! However, due to legal restrictions, we cannot hire in India."
+    res = classify_eligibility("Junior AI Engineer", "Worldwide", desc, is_remote=True)
+    assert res.category == EligibilityCategory.COUNTRY_RESTRICTED
+    assert res.can_apply_from_india is False
+    assert res.actionability == ActionabilityState.INELIGIBLE
 
 
 def test_us_restricted_remote():
@@ -37,6 +72,7 @@ def test_us_restricted_remote():
     res = classify_eligibility("Software Engineer", "US Remote", desc, is_remote=True)
     assert res.category == EligibilityCategory.COUNTRY_RESTRICTED
     assert res.can_apply_from_india is False
+    assert res.actionability == ActionabilityState.INELIGIBLE
 
 
 def test_germany_remote_only():
@@ -44,6 +80,7 @@ def test_germany_remote_only():
     res = classify_eligibility("Python Backend Engineer", "Germany Remote", desc, is_remote=True)
     assert res.category == EligibilityCategory.GERMANY_REMOTE
     assert res.can_apply_from_india is False
+    assert res.actionability == ActionabilityState.INELIGIBLE
 
 
 def test_relocation_supported():
@@ -52,12 +89,16 @@ def test_relocation_supported():
     assert res.category == EligibilityCategory.RELOCATION_SUPPORTED
     assert res.can_apply_from_india is False  # Requires relocation, not remote from India
     assert res.is_relocation_pathway is True
+    assert res.actionability == ActionabilityState.RELOCATION_PATHWAY
     assert res.visa_sponsorship is True
 
 
 def test_eligibility_unknown_when_unclear():
     desc = "Looking for a skilled Python developer to join our growing company."
     res = classify_eligibility("Python Developer", "Berlin", desc, is_remote=False)
+    assert res.category == EligibilityCategory.ELIGIBILITY_UNKNOWN
+    assert res.can_apply_from_india is False
+    assert res.actionability == ActionabilityState.PENDING_LOCATION_VERIFICATION
     assert res.category == EligibilityCategory.ELIGIBILITY_UNKNOWN
     assert res.can_apply_from_india is False
 
@@ -103,6 +144,34 @@ def test_language_c1_german_blocked():
     assert res.category == LanguageCategory.GERMAN_REQUIRED_C1_PLUS
     assert res.is_immediately_eligible is False
     assert res.requires_future_learning is True
+    assert "C1/C2" in res.rejection_reason
+
+
+def test_language_b2_german_mandatory_blocked_with_accurate_reason():
+    desc = "Gute Deutschkenntnisse (B2) zwingend erforderlich für Kundenprojekte."
+    res = classify_languages(desc)
+    assert res.category == LanguageCategory.GERMAN_REQUIRED_B2
+    assert res.is_immediately_eligible is False
+    assert res.requires_future_learning is True
+    assert "B2" in res.rejection_reason
+    assert "C1/C2" not in res.rejection_reason
+
+
+def test_language_b1_german_mandatory_blocked_with_accurate_reason():
+    desc = "Mindestens B1 Deutsch ist zwingend erforderlich."
+    res = classify_languages(desc)
+    assert res.category == LanguageCategory.GERMAN_REQUIRED_B1
+    assert res.is_immediately_eligible is False
+    assert res.requires_future_learning is True
+    assert "B1" in res.rejection_reason
+    assert "C1/C2" not in res.rejection_reason
+
+
+def test_language_preferred_not_required():
+    desc = "German is preferred but not required. English is required."
+    res = classify_languages(desc)
+    assert res.category == LanguageCategory.ENGLISH_REQUIRED_GERMAN_PREFERRED
+    assert res.is_immediately_eligible is True
 
 
 def test_language_preferred_german_allowed():

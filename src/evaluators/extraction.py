@@ -24,6 +24,8 @@ from typing import Optional, Tuple, Dict, List
 class GermanRequirement(str, Enum):
     """German language proficiency classification tiers."""
     MANDATORY_C1_PLUS = "MANDATORY_C1_PLUS"
+    MANDATORY_B2 = "MANDATORY_B2"
+    MANDATORY_B1 = "MANDATORY_B1"
     PREFERRED_B1_B2 = "PREFERRED_B1_B2"
     OPTIONAL_A1_A2 = "OPTIONAL_A1_A2"
     UNKNOWN = "UNKNOWN"
@@ -250,6 +252,13 @@ def detect_german_requirement(text: str) -> GermanRequirement:
             break
 
     if is_mandatory:
+        # Check specific mandatory level
+        if re.search(r"\b(c[12]|fluent|flie[ßs]end|verhandlungssicher\w*|muttersprach\w*|sehr\s+gute\s+deutschkenntnisse)\b", text, re.IGNORECASE):
+            return GermanRequirement.MANDATORY_C1_PLUS
+        if re.search(r"\b(b2|mindestens\s+b2|level\s+b2)\b", text, re.IGNORECASE):
+            return GermanRequirement.MANDATORY_B2
+        if re.search(r"\b(b1|mindestens\s+b1|level\s+b1)\b", text, re.IGNORECASE):
+            return GermanRequirement.MANDATORY_B1
         return GermanRequirement.MANDATORY_C1_PLUS
 
     if any(p.search(text) for p in _GERMAN_PREFERRED) or has_preferred_not_required:

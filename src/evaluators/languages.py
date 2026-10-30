@@ -18,6 +18,8 @@ class LanguageCategory(str, Enum):
     ENGLISH_REQUIRED_GERMAN_PREFERRED = "ENGLISH_REQUIRED_GERMAN_PREFERRED"
     ENGLISH_AND_BASIC_GERMAN_ACCEPTED = "ENGLISH_AND_BASIC_GERMAN_ACCEPTED"
     GERMAN_REQUIRED_A1_A2 = "GERMAN_REQUIRED_A1_A2"
+    GERMAN_REQUIRED_B1 = "GERMAN_REQUIRED_B1"
+    GERMAN_REQUIRED_B2 = "GERMAN_REQUIRED_B2"
     GERMAN_REQUIRED_B1_B2 = "GERMAN_REQUIRED_B1_B2"
     GERMAN_REQUIRED_C1_PLUS = "GERMAN_REQUIRED_C1_PLUS"
     OTHER_LANGUAGE_REQUIRED = "OTHER_LANGUAGE_REQUIRED"
@@ -69,6 +71,20 @@ def classify_languages(text: str) -> LanguageAssessment:
             is_immediately_eligible=False,
             requires_future_learning=True,
             rejection_reason="Mandatory fluent German (C1/C2) required; candidate current proficiency is basic (A1).",
+        )
+    elif german_tier == GermanRequirement.MANDATORY_B2:
+        return LanguageAssessment(
+            category=LanguageCategory.GERMAN_REQUIRED_B2,
+            is_immediately_eligible=False,
+            requires_future_learning=True,
+            rejection_reason="Mandatory upper-intermediate German (B2) required; candidate current proficiency is basic (A1).",
+        )
+    elif german_tier == GermanRequirement.MANDATORY_B1:
+        return LanguageAssessment(
+            category=LanguageCategory.GERMAN_REQUIRED_B1,
+            is_immediately_eligible=False,
+            requires_future_learning=True,
+            rejection_reason="Mandatory intermediate German (B1) required; candidate current proficiency is basic (A1).",
         )
     elif german_tier == GermanRequirement.PREFERRED_B1_B2:
         return LanguageAssessment(

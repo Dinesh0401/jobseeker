@@ -15,7 +15,7 @@ import urllib.error
 
 from src.profiles.loader import load_candidate_profile, load_profile_as_dict
 from src.evaluators.extraction import run_extraction
-from src.evaluators.eligibility import classify_eligibility, EligibilityCategory
+from src.evaluators.eligibility import classify_eligibility, EligibilityCategory, ActionabilityState
 from src.evaluators.seniority import classify_seniority, SeniorityTier
 from src.evaluators.languages import classify_languages, LanguageCategory
 from src.matching.models import GeminiEvaluationResponse, MultiDimensionalEvaluationResult
@@ -30,7 +30,7 @@ def compute_location_score(category: EligibilityCategory, is_relocation: bool) -
     if category == EligibilityCategory.RELOCATION_SUPPORTED or is_relocation:
         return 85
     if category == EligibilityCategory.ELIGIBILITY_UNKNOWN:
-        return 40
+        return 0
     # Germany/Europe remote only or country restricted = 0
     return 0
 
@@ -47,7 +47,11 @@ def compute_language_score(category: LanguageCategory) -> int:
         return 80
     if category == LanguageCategory.LANGUAGE_UNKNOWN:
         return 70
-    if category == LanguageCategory.GERMAN_REQUIRED_B1_B2:
+    if category in [
+        LanguageCategory.GERMAN_REQUIRED_B1,
+        LanguageCategory.GERMAN_REQUIRED_B2,
+        LanguageCategory.GERMAN_REQUIRED_B1_B2,
+    ]:
         return 30
     # C1+ German or another foreign language required = 0
     return 0
@@ -134,25 +138,23 @@ class SemanticMatcher:
         # 4. Language Requirements Assessment
         languages = classify_languages(description)
 
-        # 5. Check Hard Gates
+        # 5. Stage 1 — Eligibility and Hard Gates
         hard_gate_failures = []
         if not seniority.is_early_career_match:
             hard_gate_failures.append(seniority.rejection_reason or "Seniority exceeds early-career profile")
 
-        if not eligibility.can_apply_from_india and not eligibility.is_relocation_pathway and eligibility.category != EligibilityCategory.ELIGIBILITY_UNKNOWN:
+        if eligibility.actionability == ActionabilityState.INELIGIBLE:
             hard_gate_failures.append(f"Ineligible location: {eligibility.category.value} (Cannot apply from India)")
 
-        if not languages.is_immediately_eligible and languages.category == LanguageCategory.GERMAN_REQUIRED_C1_PLUS:
-            hard_gate_failures.append("Mandatory German C1+ requirement exceeds current basic proficiency")
-        elif not languages.is_immediately_eligible and languages.category == LanguageCategory.OTHER_LANGUAGE_REQUIRED:
-            hard_gate_failures.append(languages.rejection_reason or "Unmet mandatory foreign language")
+        if not languages.is_immediately_eligible:
+            hard_gate_failures.append(languages.rejection_reason or "Mandatory language requirement not met")
 
         # Compute baseline sub-scores
         exp_score = compute_experience_score(seniority.tier)
         loc_score = compute_location_score(eligibility.category, eligibility.is_relocation_pathway)
         lang_score = compute_language_score(languages.category)
 
-        # If hard gates failed, we can fast-fail without burning Gemini tokens
+        # If hard gates failed, fast-fail with REJECT without burning Gemini tokens
         if hard_gate_failures:
             return MultiDimensionalEvaluationResult(
                 technical_match_score=0,
@@ -163,11 +165,34 @@ class SemanticMatcher:
                 verdict="REJECT",
                 hard_gate_passed=False,
                 hard_gate_failures=hard_gate_failures,
+                actionability=eligibility.actionability,
                 eligibility_category=eligibility.category,
                 language_category=languages.category,
                 seniority_tier=seniority.tier,
                 can_apply_from_india=eligibility.can_apply_from_india,
                 is_relocation_pathway=eligibility.is_relocation_pathway,
+                cover_letter_pitch="",
+                contact_email=extraction.contact_email,
+                email_type=extraction.email_type.value if extraction.email_type else None,
+            )
+
+        # If location eligibility is unconfirmed, hold without burning Gemini tokens or proceeding to CV generation
+        if eligibility.actionability == ActionabilityState.PENDING_LOCATION_VERIFICATION:
+            return MultiDimensionalEvaluationResult(
+                technical_match_score=0,
+                experience_level_score=exp_score,
+                location_eligibility_score=loc_score,
+                language_compatibility_score=lang_score,
+                overall_match_score=0,
+                verdict="HOLD",
+                hard_gate_passed=False,
+                hard_gate_failures=["Location eligibility unconfirmed; held for manual location verification."],
+                actionability=ActionabilityState.PENDING_LOCATION_VERIFICATION,
+                eligibility_category=eligibility.category,
+                language_category=languages.category,
+                seniority_tier=seniority.tier,
+                can_apply_from_india=False,
+                is_relocation_pathway=False,
                 cover_letter_pitch="",
                 contact_email=extraction.contact_email,
                 email_type=extraction.email_type.value if extraction.email_type else None,
@@ -243,6 +268,7 @@ Output ONLY valid JSON matching this schema:
                 verdict=verdict,
                 hard_gate_passed=True,
                 hard_gate_failures=[],
+                actionability=eligibility.actionability,
                 eligibility_category=eligibility.category,
                 language_category=languages.category,
                 seniority_tier=seniority.tier,
@@ -268,6 +294,7 @@ Output ONLY valid JSON matching this schema:
                 verdict="REJECT",
                 hard_gate_passed=False,
                 hard_gate_failures=[f"LLM evaluation failed: {e}"],
+                actionability=eligibility.actionability,
                 eligibility_category=eligibility.category,
                 language_category=languages.category,
                 seniority_tier=seniority.tier,

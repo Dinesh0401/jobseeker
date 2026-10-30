@@ -16,6 +16,7 @@ from typing import Optional
 from src.config import load_config
 from src.db.client import DatabaseClient, InvalidStateTransition
 from src.collectors.aggregator import JobCollectorAggregator
+from src.evaluators.eligibility import ActionabilityState
 from src.evaluators.extraction import run_extraction, DocumentRequirement
 from src.matching.evaluator import SemanticMatcher
 from src.cv.builder import CVBuilder
@@ -31,6 +32,7 @@ def phase_generate_tex(
     db: DatabaseClient,
     profile_dir: str = "profile",
     match_threshold: int = 60,
+    output_dir: str = "output",
     summary: Optional[RunSummary] = None,
 ) -> RunSummary:
     """
@@ -78,12 +80,15 @@ def phase_generate_tex(
         company = job.get("company", "")
         desc = job.get("description", "")
 
+        job_loc = job.get("location", "") or ""
+        job_remote = bool(job.get("is_remote", False)) or ("remote" in title.lower() or "remote" in desc.lower())
+
         res = matcher.evaluate(
             title=title,
             company=company,
-            location="Remote / Worldwide",
+            location=job_loc,
             description=desc,
-            is_remote=True,
+            is_remote=job_remote,
         )
 
         # Track category metrics
@@ -113,12 +118,28 @@ def phase_generate_tex(
             "min_experience": extraction.min_experience if extraction else None,
         })
 
-        if res.hard_gate_passed and res.overall_match_score >= match_threshold and res.verdict != "REJECT":
+        if (
+            res.hard_gate_passed
+            and res.actionability in [ActionabilityState.CONFIRMED_ELIGIBLE, ActionabilityState.RELOCATION_PATHWAY]
+            and res.overall_match_score >= match_threshold
+            and res.verdict != "REJECT"
+            and res.verdict != "HOLD"
+        ):
             try:
                 db.transition_state(job_id, "MATCHED")
-                logger.info("MATCHED: %s at %s (Overall: %d, Tech: %d, Loc: %d)", title, company, res.overall_match_score, res.technical_match_score, res.location_eligibility_score)
+                logger.info(
+                    "MATCHED: %s at %s (Overall: %d, Tech: %d, Loc: %d, Actionability: %s)",
+                    title, company, res.overall_match_score, res.technical_match_score, res.location_eligibility_score, res.actionability.value,
+                )
             except InvalidStateTransition as e:
                 logger.warning("Skipping MATCHED transition for %s: %s", job_id[:12], e)
+        elif res.verdict == "HOLD" or (res.actionability == ActionabilityState.PENDING_LOCATION_VERIFICATION and res.verdict != "REJECT"):
+            summary.jobs_held_for_verification += 1
+            logger.info(
+                "HOLD: %s at %s - Pending Location Verification (Actionability: %s, Tech Score: %d)",
+                title, company, res.actionability.value, res.technical_match_score,
+            )
+            # Job remains in EVALUATED state without triggering CV generation, rejection, or dispatch queue
         else:
             summary.jobs_rejected += 1
             try:
@@ -129,7 +150,7 @@ def phase_generate_tex(
 
     # 4. Generate .tex CVs and provenance for MATCHED jobs
     matched = db.get_jobs_by_state("MATCHED")
-    cv_builder = CVBuilder(profile_dir=profile_dir, output_dir="output")
+    cv_builder = CVBuilder(profile_dir=profile_dir, output_dir=output_dir)
 
     for job in matched:
         job_id = job["id"]

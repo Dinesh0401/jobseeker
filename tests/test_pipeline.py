@@ -287,3 +287,97 @@ def test_pipeline_e2e_generate_tex_and_finalize(mock_db, monkeypatch, tmp_path):
     assert len(telegram_sent) == 1
     assert summary.jobs_sent_to_telegram == 1
 
+
+def test_pipeline_unknown_eligibility_with_perfect_tech_score_does_not_generate_cv(mock_db, monkeypatch, tmp_path):
+    from src.collectors.aggregator import CollectionReport
+    from src.observability.metrics import RunSummary
+
+    # Collector returns a job with unknown location eligibility
+    def mock_aggregator_run(self, db, limit_per_source=30):
+        db.insert_job(
+            source="custom",
+            title="Junior AI Engineer",
+            company="Stealth AI Labs",
+            url="https://example.com/stealth-ai",
+            description="We are seeking an entry-level Junior AI Engineer with Python and LLMs. 0-1 years exp.",
+        )
+        return CollectionReport(sources_attempted=1, sources_successful=1, jobs_fetched=1, jobs_relevant=1, jobs_inserted=1)
+
+    monkeypatch.setattr("src.pipeline.JobCollectorAggregator.run", mock_aggregator_run)
+
+    # Gemini returns perfect 100 technical score
+    def mock_call_gemini(self, prompt):
+        return {
+            "technical_score": 100,
+            "matched_skills": ["Python", "LLMs"],
+            "missing_skills": [],
+            "matched_experience_keys": ["exp_example"],
+            "matched_project_keys": ["project_example"],
+            "experience_fit_score": 100,
+            "recommendation": "APPLY",
+            "risks_and_reasons": [],
+            "cover_letter_pitch": "Perfect fit.",
+        }
+
+    monkeypatch.setattr("src.matching.evaluator.SemanticMatcher._call_gemini_with_retry", mock_call_gemini)
+
+    summary = RunSummary()
+    phase_generate_tex(
+        db=mock_db,
+        profile_dir="profile",
+        match_threshold=60,
+        output_dir=str(tmp_path),
+        summary=summary,
+    )
+
+    jobs = list(mock_db.jobs.values())
+    assert len(jobs) == 1
+    job = jobs[0]
+
+    # Verify job is held in EVALUATED state and NOT promoted to MATCHED
+    assert job["state"] == "EVALUATED", "Unknown location eligibility must remain EVALUATED on hold"
+    assert summary.jobs_held_for_verification == 1
+
+    # Verify NO .tex file is created for held job
+    tex_file = tmp_path / f"{job['id'][:16]}_cv.tex"
+    assert not tex_file.exists(), "Unknown eligibility must NEVER generate a CV"
+
+
+def test_pipeline_india_exclusion_with_worldwide_wording_is_rejected(mock_db, monkeypatch, tmp_path):
+    from src.collectors.aggregator import CollectionReport
+    from src.observability.metrics import RunSummary
+
+    def mock_aggregator_run(self, db, limit_per_source=30):
+        db.insert_job(
+            source="custom",
+            title="Junior AI Engineer",
+            company="Global Corp",
+            url="https://example.com/global-corp",
+            description="Worldwide remote, but we cannot hire candidates from India. English only. 0-1 years exp.",
+        )
+        return CollectionReport(sources_attempted=1, sources_successful=1, jobs_fetched=1, jobs_relevant=1, jobs_inserted=1)
+
+    monkeypatch.setattr("src.pipeline.JobCollectorAggregator.run", mock_aggregator_run)
+
+    summary = RunSummary()
+    phase_generate_tex(
+        db=mock_db,
+        profile_dir="profile",
+        match_threshold=60,
+        output_dir=str(tmp_path),
+        summary=summary,
+    )
+
+    jobs = list(mock_db.jobs.values())
+    assert len(jobs) == 1
+    job = jobs[0]
+
+    # Must be REJECTED, not MATCHED or EVALUATED
+    assert job["state"] == "REJECTED", "Explicit India exclusion must be REJECTED"
+    assert summary.jobs_rejected == 1
+
+    # Verify NO .tex file is created
+    tex_file = tmp_path / f"{job['id'][:16]}_cv.tex"
+    assert not tex_file.exists(), "Excluded country job must NEVER generate a CV"
+
+

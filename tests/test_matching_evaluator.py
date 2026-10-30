@@ -78,7 +78,7 @@ def test_hard_gate_rejects_german_c1_without_llm():
 
     assert not result.hard_gate_passed
     assert result.verdict == "REJECT"
-    assert "German C1+" in result.hard_gate_failures[0]
+    assert "German" in result.hard_gate_failures[0] and "C1" in result.hard_gate_failures[0]
     assert matcher._call_gemini_with_retry.call_count == 0
 
 

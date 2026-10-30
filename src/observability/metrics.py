@@ -23,6 +23,7 @@ class RunSummary:
     jobs_inserted: int = 0
     jobs_evaluated: int = 0
     jobs_rejected: int = 0
+    jobs_held_for_verification: int = 0
     evaluation_failures: int = 0
 
     # International Classification Metrics
@@ -63,6 +64,7 @@ class RunSummary:
 | **New Jobs Ingested** | {self.jobs_inserted} |
 | **Jobs Evaluated** | {self.jobs_evaluated} |
 | **Hard Gated / Rejected** | {self.jobs_rejected} |
+| **Held for Location Verification** | {self.jobs_held_for_verification} |
 | **Evaluation Failures** | {self.evaluation_failures} |
 | **India-Eligible Remote** | {self.india_eligible_jobs} |
 | **Worldwide Remote** | {self.worldwide_remote_jobs} |

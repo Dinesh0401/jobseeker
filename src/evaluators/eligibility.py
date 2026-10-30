@@ -23,11 +23,19 @@ class EligibilityCategory(str, Enum):
     ELIGIBILITY_UNKNOWN = "ELIGIBILITY_UNKNOWN"
 
 
+class ActionabilityState(str, Enum):
+    CONFIRMED_ELIGIBLE = "CONFIRMED_ELIGIBLE"
+    RELOCATION_PATHWAY = "RELOCATION_PATHWAY"
+    PENDING_LOCATION_VERIFICATION = "PENDING_LOCATION_VERIFICATION"
+    INELIGIBLE = "INELIGIBLE"
+
+
 @dataclass
 class EligibilityAssessment:
     category: EligibilityCategory
     can_apply_from_india: bool
     is_relocation_pathway: bool
+    actionability: ActionabilityState = ActionabilityState.INELIGIBLE
     evidence: List[str] = field(default_factory=list)
     eligible_countries: List[str] = field(default_factory=list)
     excluded_countries: List[str] = field(default_factory=list)
@@ -58,6 +66,17 @@ _RESTRICTION_PATTERNS = [
     re.compile(r"\b(?:must\s+reside\s+in\s+(?:canada|uk|united\s+kingdom|australia)|uk\s+only|canada\s+only)\b", re.IGNORECASE),
     re.compile(r"\b(?:no\s+visa\s+sponsorship|cannot\s+sponsor\s+visas?|unable\s+to\s+sponsor|we\s+do\s+not\s+offer\s+visa\s+sponsorship)\b", re.IGNORECASE),
     re.compile(r"\b(?:must\s+have\s+existing\s+work\s+authorization|right\s+to\s+work\s+in\s+(?:the\s+)?(?:eu|uk|us)\s+required)\b", re.IGNORECASE),
+]
+
+_INDIA_EXCLUSION_PATTERNS = [
+    re.compile(r"\b(?:cannot|can't|unable\s+to)\s+hire\s+(?:(?:candidates|applicants|residents|people)\s+)?(?:in|from|within)\s+india\b", re.IGNORECASE),
+    re.compile(r"\b(?:excluding|except|not\s+including)\s+(?:candidates\s+(?:in|from)\s+)?india\b", re.IGNORECASE),
+    re.compile(r"\b(?:not\s+open\s+to|closed\s+to)\s+(?:candidates|applicants|residents)\s+(?:in|from|based\s+in)\s+india\b", re.IGNORECASE),
+    re.compile(r"\b(?:cannot|can't|unable\s+to)\s+employ\s+(?:(?:residents|candidates|citizens|people|applicants)\s+)?(?:of|in|from|within)\s+india\b", re.IGNORECASE),
+    re.compile(r"\b(?:applicants|candidates|employees)\s+must\s+not\s+be\s+located\s+in\s+india\b", re.IGNORECASE),
+    re.compile(r"\bindia\s+is\s+not\s+an?\s+(?:eligible|supported|approved)\s+(?:hiring\s+country|country|location|region)\b", re.IGNORECASE),
+    re.compile(r"\b(?:not\s+eligible|ineligible)\s*:\s*india\b", re.IGNORECASE),
+    re.compile(r"\bno\s+candidates\s+(?:from|in)\s+india\b", re.IGNORECASE),
 ]
 
 _GERMANY_ONLY_PATTERNS = [
@@ -91,7 +110,16 @@ def classify_eligibility(
             visa_sponsorship = True
             relocation_available = True
 
-    # 2. Check for explicit negative country restrictions
+    # 2. Check for explicit negative India restrictions (HIGHEST PRECEDENCE)
+    is_india_excluded = False
+    for p in _INDIA_EXCLUSION_PATTERNS:
+        match = p.search(full_text)
+        if match:
+            evidence.append(f"Explicit India exclusion detected: '{match.group(0)}'")
+            is_india_excluded = True
+            break
+
+    # 3. Check for explicit negative country restrictions
     for p in _RESTRICTION_PATTERNS:
         match = p.search(full_text)
         if match:
@@ -99,7 +127,7 @@ def classify_eligibility(
             if "no visa sponsorship" in match.group(0).lower() or "unable to sponsor" in match.group(0).lower():
                 visa_sponsorship = False
 
-    # 3. Check for India specific eligibility
+    # 4. Check for India specific eligibility
     is_india_eligible = False
     for p in _INDIA_PATTERNS:
         match = p.search(full_text)
@@ -107,7 +135,7 @@ def classify_eligibility(
             evidence.append(f"India eligibility evidence: '{match.group(0)}'")
             is_india_eligible = True
 
-    # 4. Check for Worldwide Remote
+    # 5. Check for Worldwide Remote
     is_worldwide = False
     for p in _WORLDWIDE_PATTERNS:
         match = p.search(full_text)
@@ -129,12 +157,25 @@ def classify_eligibility(
     has_hard_restriction = any("Restriction detected" in e for e in evidence)
 
     # Decision tree:
+    # 1. Explicit India exclusion takes absolute precedence over worldwide or remote
+    if is_india_excluded:
+        return EligibilityAssessment(
+            category=EligibilityCategory.COUNTRY_RESTRICTED,
+            can_apply_from_india=False,
+            is_relocation_pathway=False,
+            actionability=ActionabilityState.INELIGIBLE,
+            evidence=evidence,
+            visa_sponsorship=visa_sponsorship,
+            relocation_available=relocation_available,
+        )
+
     if has_hard_restriction and not is_worldwide and not is_india_eligible:
         # Restricted away from India
         return EligibilityAssessment(
             category=EligibilityCategory.COUNTRY_RESTRICTED,
             can_apply_from_india=False,
             is_relocation_pathway=False,
+            actionability=ActionabilityState.INELIGIBLE,
             evidence=evidence,
             visa_sponsorship=visa_sponsorship,
             relocation_available=relocation_available,
@@ -145,6 +186,7 @@ def classify_eligibility(
             category=EligibilityCategory.INDIA_ELIGIBLE_REMOTE,
             can_apply_from_india=True,
             is_relocation_pathway=bool(relocation_available),
+            actionability=ActionabilityState.CONFIRMED_ELIGIBLE,
             evidence=evidence,
             visa_sponsorship=visa_sponsorship,
             relocation_available=relocation_available,
@@ -155,6 +197,7 @@ def classify_eligibility(
             category=EligibilityCategory.WORLDWIDE_REMOTE,
             can_apply_from_india=True,
             is_relocation_pathway=bool(relocation_available),
+            actionability=ActionabilityState.CONFIRMED_ELIGIBLE,
             evidence=evidence,
             visa_sponsorship=visa_sponsorship,
             relocation_available=relocation_available,
@@ -165,6 +208,7 @@ def classify_eligibility(
             category=EligibilityCategory.RELOCATION_SUPPORTED,
             can_apply_from_india=False,
             is_relocation_pathway=True,
+            actionability=ActionabilityState.RELOCATION_PATHWAY,
             evidence=evidence,
             visa_sponsorship=True,
             relocation_available=True,
@@ -179,6 +223,7 @@ def classify_eligibility(
                 category=EligibilityCategory.GERMANY_REMOTE,
                 can_apply_from_india=False,
                 is_relocation_pathway=False,
+                actionability=ActionabilityState.INELIGIBLE,
                 evidence=evidence,
                 visa_sponsorship=False,
                 relocation_available=False,
@@ -192,6 +237,7 @@ def classify_eligibility(
                 category=EligibilityCategory.EUROPE_REMOTE,
                 can_apply_from_india=False,
                 is_relocation_pathway=False,
+                actionability=ActionabilityState.INELIGIBLE,
                 evidence=evidence,
                 visa_sponsorship=False,
                 relocation_available=False,
@@ -204,6 +250,7 @@ def classify_eligibility(
             category=EligibilityCategory.COUNTRY_SPECIFIC_REMOTE,
             can_apply_from_india=False,
             is_relocation_pathway=False,
+            actionability=ActionabilityState.INELIGIBLE,
             evidence=evidence,
             visa_sponsorship=visa_sponsorship,
             relocation_available=relocation_available,
@@ -215,6 +262,7 @@ def classify_eligibility(
         category=EligibilityCategory.ELIGIBILITY_UNKNOWN,
         can_apply_from_india=False,
         is_relocation_pathway=False,
+        actionability=ActionabilityState.PENDING_LOCATION_VERIFICATION,
         evidence=evidence,
         visa_sponsorship=visa_sponsorship,
         relocation_available=relocation_available,
