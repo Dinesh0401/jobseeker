@@ -31,7 +31,6 @@ def phase_generate_tex(
     db: DatabaseClient,
     profile_dir: str = "profile",
     match_threshold: int = 60,
-    output_dir: str = "output",
     summary: Optional[RunSummary] = None,
 ) -> RunSummary:
     """
@@ -130,7 +129,7 @@ def phase_generate_tex(
 
     # 4. Generate .tex CVs and provenance for MATCHED jobs
     matched = db.get_jobs_by_state("MATCHED")
-    cv_builder = CVBuilder(profile_dir=profile_dir, output_dir=output_dir)
+    cv_builder = CVBuilder(profile_dir=profile_dir, output_dir="output")
 
     for job in matched:
         job_id = job["id"]
