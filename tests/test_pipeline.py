@@ -53,6 +53,21 @@ def mock_db():
 
             self.client = MockClient(self)
 
+        def insert_job(self, source, title, company, url, description):
+            job_id = DatabaseClient.generate_job_id(source, title, company, url)
+            if job_id in self.jobs:
+                return None
+            self.jobs[job_id] = {
+                "id": job_id,
+                "source": source,
+                "title": title,
+                "company": company,
+                "url": url,
+                "description": description,
+                "state": "INGESTED",
+            }
+            return {"id": job_id}
+
         def upsert_assets(self, job_id, pdf_path, cover_letter):
             self.assets[job_id] = {"pdf": pdf_path, "cover": cover_letter}
 
@@ -168,4 +183,107 @@ def test_missing_required_documents_blocks_assets_ready(mock_db, monkeypatch, tm
     # Assert job remains in MATCHED because required document (Degree Certificate) is missing
     assert mock_db.jobs[job_id]['state'] == "MATCHED"
     assert (job_id, "ASSETS_READY") not in mock_db.transitions
+
+
+def test_pipeline_e2e_generate_tex_and_finalize(mock_db, monkeypatch, tmp_path):
+    from src.collectors.aggregator import CollectionReport
+    from src.matching.models import GeminiEvaluationResponse
+    from src.observability.metrics import RunSummary
+
+    # 1. Mock Collector Aggregator to return 2 jobs: 1 target junior role, 1 senior role
+    def mock_aggregator_run(self, db, limit_per_source=30):
+        db.insert_job(
+            source="arbeitnow",
+            title="Junior AI Engineer",
+            company="RemoteAI Labs",
+            url="https://example.com/junior-ai",
+            description="We are seeking an entry-level Junior AI Engineer. Requirements: Python, LLMs, and RAG. Fully remote worldwide. English only. 0-1 years of experience.",
+        )
+        db.insert_job(
+            source="jobicy",
+            title="Senior Director of Machine Learning",
+            company="Enterprise AI",
+            url="https://example.com/senior-director",
+            description="Leading AI teams. Requirements: 10+ years experience, staff management.",
+        )
+        report = CollectionReport(
+            sources_attempted=2,
+            sources_successful=2,
+            jobs_fetched=2,
+            jobs_relevant=2,
+            jobs_inserted=2,
+        )
+        return report
+
+    monkeypatch.setattr("src.pipeline.JobCollectorAggregator.run", mock_aggregator_run)
+
+    # 2. Mock Gemini call in SemanticMatcher
+    def mock_call_gemini(self, prompt):
+        return {
+            "technical_score": 92,
+            "matched_skills": ["Python", "LLMs"],
+            "missing_skills": [],
+            "matched_experience_keys": ["internship_applied_ai"],
+            "matched_project_keys": ["job_hunter_v2"],
+            "experience_fit_score": 95,
+            "recommendation": "APPLY",
+            "risks_and_reasons": [],
+            "cover_letter_pitch": "I am passionate about building agentic workflows with Python.",
+        }
+
+    monkeypatch.setattr("src.matching.evaluator.SemanticMatcher._call_gemini_with_retry", mock_call_gemini)
+
+    # Phase 1: generate_tex
+    summary = RunSummary()
+    phase_generate_tex(
+        db=mock_db,
+        profile_dir="profile",
+        match_threshold=60,
+        output_dir=str(tmp_path),
+        summary=summary,
+    )
+
+    # Verify that junior job matched and senior job was rejected
+    junior_jobs = [j for j in mock_db.jobs.values() if "Junior" in j["title"]]
+    senior_jobs = [j for j in mock_db.jobs.values() if "Senior" in j["title"]]
+    assert len(junior_jobs) == 1
+    assert len(senior_jobs) == 1
+
+    junior_id = junior_jobs[0]["id"]
+    senior_id = senior_jobs[0]["id"]
+
+    assert junior_jobs[0]["state"] == "MATCHED"
+    assert senior_jobs[0]["state"] == "REJECTED"
+
+    # Verify .tex and provenance JSON generated for junior job
+    tex_file = tmp_path / f"{junior_id[:16]}_cv.tex"
+    provenance_file = tmp_path / f"{junior_id[:16]}_provenance.json"
+    assert tex_file.exists(), "LaTeX CV file should have been generated for matched job"
+    assert provenance_file.exists(), "Provenance JSON should have been generated for matched job"
+
+    # Verify no .tex generated for senior job
+    senior_tex = tmp_path / f"{senior_id[:16]}_cv.tex"
+    assert not senior_tex.exists(), "No CV should be generated for rejected job"
+
+    # Phase 2: finalize_assets
+    # Create fake valid compiled PDF (>2KB) for the matched job
+    pdf_path = tmp_path / f"{junior_id[:16]}_cv.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n" + b"A" * 2500)
+
+    telegram_sent = []
+    def mock_send_card(*args, **kwargs):
+        telegram_sent.append(kwargs)
+
+    monkeypatch.setattr("src.pipeline.send_approval_card", mock_send_card)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "mock-token")
+    monkeypatch.setenv("MY_TELEGRAM_CHAT_ID", "mock-chat-id")
+
+    phase_finalize_assets(mock_db, output_dir=str(tmp_path), summary=summary)
+
+    # Verify job moved to PENDING_APPROVAL and action_queue was created
+    assert junior_jobs[0]["state"] == "PENDING_APPROVAL"
+    assert len(mock_db.actions) == 1
+    assert mock_db.actions[0]["job_id"] == junior_id
+    assert len(telegram_sent) == 1
+    assert summary.jobs_sent_to_telegram == 1
 

@@ -1,43 +1,66 @@
-# Technical Specification: Job Hunter v1
+# Technical Specification: Job Hunter v2
 
-> **Author**: @pm (Product Manager & Architect)
-> **Version**: 1.1.0
-> **Status**: ✅ APPROVED
-> **Date**: 2026-09-01
-
----
-
-## 1. System Architecture and Component Boundaries
-
-The Job Hunter v1 is an asynchronous, state-driven application designed to autonomously evaluate, prepare, and queue job applications for human approval.
-
-**Component Flow:**
-
-1. **Collectors:** Python scripts (triggered via GitHub Actions) ingest job postings from RSS, APIs, and IMAP emails.
-2. **Deterministic Extractor:** Python regex engine normalizes URLs, deduplicates records, and extracts hard facts (emails, experience, German proficiency).
-3. **Semantic Evaluator:** Gemini 2.5 Flash analyzes the job against the candidate profile and extracted facts.
-4. **Asset Generator:** Dynamic generation of LaTeX-based CVs and customized outreach pitches.
-5. **Database (Source of Truth):** Supabase PostgreSQL manages all application state, evaluations, and queueing.
-6. **Control Plane:** Telegram Bot API displays interactive cards. A Supabase Edge Function (webhook) receives approvals.
-7. **Dispatch Worker:** GitHub Actions cron job consumes the queue, executing idempotent operations via Gmail SMTP or preparing ATS instructions.
+> **Author**: @pm (Product Manager & Architect)  
+> **Version**: 2.0.0  
+> **Status**: ✅ APPROVED & IMPLEMENTED  
+> **Date**: 2026-10-30  
+> **Engine**: International AI Career Discovery & Application Engine
 
 ---
 
-## 2. PostgreSQL Database Schema
+## 1. System Architecture & Component Boundaries
+
+Job Hunter v2 is an asynchronous, state-driven, international career discovery and application engine designed to autonomously identify, verify, evaluate, and prepare verified job applications for human approval.
+
+### End-to-End Component Flow
+
+1. **Multi-Source Job Adapters:** Modular collectors (`ArbeitnowAdapter`, `JobicyAdapter`, `GreenhousePublicAdapter`) query worldwide remote and European technical boards. Canonical URL normalizer strips marketing/tracking parameters (`utm_*`, `ref`, `gh_src`, etc.).
+2. **Relevance Gate & Deduplication:** Pre-filters titles and descriptions against target early-career AI roles (`is_target_role`). Computes deterministic SHA-256 IDs and inserts deduplicated listings into Supabase PostgreSQL in `INGESTED` state.
+3. **Deterministic Fact Extractor:** Regex engine extracts hard facts: recruiter/hiring emails, minimum years of experience, document requirements (degree certificates, transcripts), and German language requirements.
+4. **International Eligibility & Seniority Classifiers:**
+   - **Location:** Categorizes jobs into `WORLDWIDE_REMOTE`, `INDIA_ELIGIBLE_REMOTE`, `RELOCATION_SUPPORTED`, `COUNTRY_RESTRICTED`, or `ELIGIBILITY_UNKNOWN`. Verifies candidate eligibility to apply from India.
+   - **Seniority:** Categorizes into `ENTRY_OR_JUNIOR` (0–1 years, Fresher, Graduate, Intern, Working Student) vs. `SENIOR_OR_LEAD` (Senior, Staff, Principal, Lead, Manager). Enforces hard-rejection for senior positions.
+   - **Languages:** Validates candidate's English fluency and Basic German (A1). Hard-rejects mandatory German C1+ or other foreign languages while accepting English-first, German-preferred, or basic German roles.
+5. **Multi-Dimensional Semantic Matcher:**
+   - Evaluates jobs across 4 weighted dimensions: Technical Match (40%), Experience Level (25%), Location Eligibility (20%), and Language Compatibility (15%).
+   - Injects genuine candidate profile (`profile.json`, `experience.json`, `projects.json`) into Gemini 2.5 Flash for semantic matching.
+   - Restricts experience and project bullet selection to exact verified keys from source files. Fast-fails hard gates without burning LLM tokens. Transitions to `MATCHED` or `REJECTED`.
+6. **Truthful CV Generation & Claim Provenance Engine:**
+   - Renders LaTeX CV from source profile facts and selected keys.
+   - Audits every bullet against source JSON files, recording verifiable claim provenance in `<job_id>_provenance.json`.
+   - Validates compiled PDF header, EOF marker, and minimum file size (>2KB). Prevents placeholder text or fictional metrics.
+7. **Asset Finalizer & Telegram Control Plane:**
+   - Base64-encodes verified PDF into `application_assets`.
+   - Transitions job state `MATCHED -> ASSETS_READY -> PENDING_APPROVAL`.
+   - Enqueues an action in `action_queue` with an idempotency key.
+   - Dispatches a rich Telegram approval card with subscore breakdown, India eligibility badge, and dual-mode buttons (`[🚀 Approve & Send]` for email applications, `[🌐 Open Portal]` + `[✅ Applied Manually]` for ATS portal applications).
+8. **Supabase Edge Function (Webhook):**
+   - Receives Telegram callback queries.
+   - Validates chat ID, updates `action_queue`, and transitions database state atomically (`APPROVED`, `REJECTED`, or `SUBMITTED`).
+9. **Dispatch Worker (Gmail SMTP):**
+   - Consumes `action_queue` items with `FOR UPDATE SKIP LOCKED` row locking (max 5 items/15 min).
+   - Recovers stale `EXECUTING` tasks (>10 min) to prevent lost sends.
+   - Enforces Candidate Profile Safety Gate (`assert_profile_ready_for_dispatch()`) to strictly block dispatch if candidate profile contains placeholder data.
+   - Sends email with CV attachment via Gmail `SMTP_SSL` (port 465). Transitions job to `SENT`.
+10. **Follow-Up Scanner:**
+    - Daily scheduled GitHub Actions run scans for applications in `SENT` status older than 7 days.
+    - Transitions jobs to `FOLLOW_UP` and notifies the candidate via Telegram.
+
+---
+
+## 2. Database Architecture & Schema
+
+### PostgreSQL State Machine & Core Tables
 
 ```sql
--- ============================================================
--- ENUMS
--- ============================================================
+-- Application State Enum
 CREATE TYPE application_state AS ENUM (
     'INGESTED', 'EVALUATED', 'MATCHED', 'ASSETS_READY',
     'PENDING_APPROVAL', 'APPROVED', 'DISPATCHING',
     'SENT', 'SUBMITTED', 'FOLLOW_UP', 'INTERVIEW', 'REJECTED', 'CLOSED'
 );
 
--- ============================================================
--- CORE TABLES
--- ============================================================
+-- Core Jobs Table
 CREATE TABLE jobs (
     id TEXT PRIMARY KEY,                          -- SHA256(source+title+company+url)
     source TEXT NOT NULL,
@@ -49,50 +72,43 @@ CREATE TABLE jobs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Job Evaluation Records
 CREATE TABLE job_evaluations (
     job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
-    score INTEGER NOT NULL,                       -- 0–100 match score
-    method TEXT,                                  -- e.g. 'gemini-2.5-flash'
+    score INTEGER NOT NULL,                       -- 0–100 overall match score
+    method TEXT,                                  -- 'v2.0-multi-dimensional'
     contact_email TEXT,                           -- Deterministically extracted
     is_visa_compatible BOOLEAN,
-    german_requirement TEXT,                      -- MANDATORY_C1_PLUS | PREFERRED_B1_B2 | OPTIONAL_A1_A2 | UNKNOWN
-    min_experience INTEGER,                       -- Extracted YoE baseline
-    tech_matches JSONB,                           -- Matched technologies
-    gaps JSONB                                    -- Missing qualifications
+    german_requirement TEXT,                      -- Language category
+    min_experience INTEGER,                       -- Extracted YoE
+    tech_matches JSONB,                           -- Matched skills
+    gaps JSONB,                                   -- Skill gaps
+    tailored_cv_bullets JSONB,                    -- Selected experience/project keys
+    cover_letter_pitch TEXT                       -- Tailored application pitch
 );
 
+-- Application Assets
 CREATE TABLE application_assets (
     job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
-    cv_pdf_path TEXT,
+    cv_pdf_path TEXT,                             -- Base64 URI or storage path
     cover_letter_body TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Action Queue (Idempotent Worker Queue)
 CREATE TABLE action_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id TEXT REFERENCES jobs(id) ON DELETE CASCADE,
-    idempotency_key UUID UNIQUE DEFAULT gen_random_uuid(),  -- Bound at queue creation
+    idempotency_key UUID UNIQUE DEFAULT gen_random_uuid(),
     telegram_chat_id TEXT NOT NULL,
     status TEXT DEFAULT 'QUEUED'
         CHECK (status IN ('QUEUED', 'APPROVED_FOR_DISPATCH', 'EXECUTING', 'DONE', 'FAILED')),
     approved_at TIMESTAMP WITH TIME ZONE,
     executed_at TIMESTAMP WITH TIME ZONE
 );
-
--- ============================================================
--- INDEXES
--- ============================================================
-CREATE INDEX idx_jobs_state ON jobs(state);
-CREATE INDEX idx_jobs_url ON jobs(url);
-CREATE INDEX idx_action_queue_pending ON action_queue(status) WHERE status = 'APPROVED_FOR_DISPATCH';
-CREATE INDEX idx_action_queue_idempotency ON action_queue(idempotency_key);
 ```
 
----
-
-## 3. Explicit Application State Machine
-
-State transitions are strictly enforced by PostgreSQL logic.
+### State Machine Transition Graph
 
 ```
 ┌──────────┐     ┌───────────┐     ┌─────────┐     ┌──────────────┐
@@ -102,268 +118,160 @@ State transitions are strictly enforced by PostgreSQL logic.
                        ▼                ▼                  ▼
                   ┌──────────┐    ┌──────────┐    ┌──────────────────┐
                   │ REJECTED │    │ REJECTED │    │ PENDING_APPROVAL │
-                  └──────────┘    └──────────┘    └────────┬─────────┘
-                                                    ┌──────┴──────┐
-                                                    ▼             ▼
-                                              ┌──────────┐  ┌──────────┐
-                                              │ APPROVED │  │ REJECTED │
-                                              └────┬─────┘  └──────────┘
-                                                   ▼
-                                            ┌──────────────┐
-                                            │ DISPATCHING  │
-                                            └──┬───────┬───┘
-                                               ▼       ▼
-                                          ┌──────┐ ┌───────────┐
-                                          │ SENT │ │ SUBMITTED │
-                                          └──┬───┘ └─────┬─────┘
-                                             │           │
-                                             ▼           ▼
-                                    ┌───────────────────────────┐
-                                    │ FOLLOW_UP | INTERVIEW |   │
-                                    │ REJECTED  | CLOSED        │
-                                    └───────────────────────────┘
-
-                                    FAILED resets to APPROVED for retry
+                  └──────────┘    └──────────┘    └───┬─────┬────┬───┘
+                                                      │     │    │
+                              ┌───────────────────────┘     │    └───────────────────────┐
+                              ▼                             ▼                            ▼
+                        ┌──────────┐                  ┌──────────┐                 ┌───────────┐
+                        │ APPROVED │                  │ REJECTED │                 │ SUBMITTED │
+                        └────┬─────┘                  └──────────┘                 └─────┬─────┘
+                             ▼                                                           │
+                      ┌──────────────┐                                                   │
+                      │ DISPATCHING  │                                                   │
+                      └──┬───────┬───┘                                                   │
+                         │       │                                                       │
+                         ▼       ▼                                                       ▼
+                    ┌──────┐ ┌───────────┐                                      ┌─────────────────┐
+                    │ SENT │ │ SUBMITTED │                                      │ FOLLOW_UP       │
+                    └──┬───┘ └─────┬─────┘                                      │ INTERVIEW       │
+                       │           │                                            │ REJECTED        │
+                       ▼           ▼                                            │ CLOSED          │
+              ┌───────────────────────────┐                                     └─────────────────┘
+              │ FOLLOW_UP | INTERVIEW |   │
+              │ REJECTED  | CLOSED        │
+              └───────────────────────────┘
 ```
 
-### Valid Transitions
+### Permitted State Transitions
 
-| From               | To                                            | Trigger                        |
-|--------------------|-----------------------------------------------|--------------------------------|
-| `INGESTED`         | `EVALUATED`                                   | Extraction pipeline completes  |
-| `EVALUATED`        | `MATCHED` \| `REJECTED`                       | Gemini score above/below gate  |
-| `MATCHED`          | `ASSETS_READY` \| `REJECTED`                  | CV/cover letter generated      |
-| `ASSETS_READY`     | `PENDING_APPROVAL`                            | Telegram card sent             |
-| `PENDING_APPROVAL` | `APPROVED` \| `REJECTED`                      | Telegram callback              |
-| `APPROVED`         | `DISPATCHING`                                 | Worker picks up from queue     |
-| `DISPATCHING`      | `SENT` \| `SUBMITTED` \| `FAILED`             | SMTP result / ATS instruction  |
-| `SENT`/`SUBMITTED` | `FOLLOW_UP` \| `INTERVIEW` \| `REJECTED` \| `CLOSED` | Manual or timed trigger |
-| `FAILED`           | `APPROVED`                                    | Reset for retry                |
-
-### State Transition Function
-
-```sql
-CREATE OR REPLACE FUNCTION transition_job_state(
-    p_job_id TEXT,
-    p_new_state application_state
-) RETURNS VOID AS $$
-DECLARE
-    v_current application_state;
-    v_valid BOOLEAN := FALSE;
-BEGIN
-    SELECT state INTO v_current FROM jobs WHERE id = p_job_id FOR UPDATE;
-
-    IF v_current IS NULL THEN
-        RAISE EXCEPTION 'Job not found: %', p_job_id;
-    END IF;
-
-    v_valid := CASE
-        WHEN v_current = 'INGESTED'         AND p_new_state = 'EVALUATED'          THEN TRUE
-        WHEN v_current = 'EVALUATED'        AND p_new_state IN ('MATCHED', 'REJECTED') THEN TRUE
-        WHEN v_current = 'MATCHED'          AND p_new_state IN ('ASSETS_READY', 'REJECTED') THEN TRUE
-        WHEN v_current = 'ASSETS_READY'     AND p_new_state = 'PENDING_APPROVAL'   THEN TRUE
-        WHEN v_current = 'PENDING_APPROVAL' AND p_new_state IN ('APPROVED', 'REJECTED') THEN TRUE
-        WHEN v_current = 'APPROVED'         AND p_new_state = 'DISPATCHING'        THEN TRUE
-        WHEN v_current = 'DISPATCHING'      AND p_new_state IN ('SENT', 'SUBMITTED', 'FAILED') THEN TRUE
-        WHEN v_current IN ('SENT', 'SUBMITTED') AND p_new_state IN ('FOLLOW_UP', 'INTERVIEW', 'REJECTED', 'CLOSED') THEN TRUE
-        WHEN v_current = 'FAILED'           AND p_new_state = 'APPROVED'           THEN TRUE
-        ELSE FALSE
-    END;
-
-    IF NOT v_valid THEN
-        RAISE EXCEPTION 'Invalid state transition: % -> %', v_current, p_new_state;
-    END IF;
-
-    UPDATE jobs SET state = p_new_state WHERE id = p_job_id;
-END;
-$$ LANGUAGE plpgsql;
-```
+| From | To | Trigger / Actor |
+|---|---|---|
+| `INGESTED` | `EVALUATED` | Fact extraction completed |
+| `EVALUATED` | `MATCHED` | Multi-dimensional score $\ge$ threshold & hard gates passed |
+| `EVALUATED` | `REJECTED` | Hard gate failure (seniority, restricted country, German C1+) or score < threshold |
+| `MATCHED` | `ASSETS_READY` | Provenance-backed CV generated and verified |
+| `MATCHED` | `REJECTED` | Missing required documentation (e.g. mandatory transcript) |
+| `ASSETS_READY` | `PENDING_APPROVAL` | Interactive Telegram approval card dispatched |
+| `PENDING_APPROVAL` | `APPROVED` | User taps `[🚀 Approve & Send]` via Telegram |
+| `PENDING_APPROVAL` | `SUBMITTED` | User applies on portal and taps `[✅ Applied Manually]` via Telegram |
+| `PENDING_APPROVAL` | `REJECTED` | User taps `[❌ Reject]` via Telegram |
+| `APPROVED` | `DISPATCHING` | Dispatch worker claims item with row lock |
+| `DISPATCHING` | `SENT` | SMTP email dispatched successfully |
+| `DISPATCHING` | `SUBMITTED` | Web portal dispatch completed |
+| `SENT` / `SUBMITTED` | `FOLLOW_UP` | Scheduled follow-up scanner (7+ days elapsed) |
+| `SENT` / `SUBMITTED` | `INTERVIEW` | Candidate receives interview invitation |
+| `SENT` / `SUBMITTED` | `REJECTED` | Employer rejection received |
+| `SENT` / `SUBMITTED` | `CLOSED` | Job closed or expired |
 
 ---
 
-## 4. Deterministic Extraction Pipeline
+## 3. Candidate Profile: Single Source of Truth & Safety Gate
 
-Executed **before** LLM invocation:
+Candidate career information is sourced strictly from immutable profile files:
+- `profile/profile.json` — Identity, contact details, education, technical skills, languages.
+- `profile/experience.json` — Professional work and internship history with unique stable keys.
+- `profile/projects.json` — Software engineering and AI projects with unique stable keys.
 
-### 4.1 Contact Email
-- Regex extracts standard email formats from job description
-- **Exclusion filter**: Strips `noreply@`, `example@`, `no-reply@`, `donotreply@`
-- Returns `Optional[str]`
-
-### 4.2 Experience Requirements
-- Regex maps natural-language experience phrases to integer baselines
-- Patterns: `"5+ years"`, `"minimum 3 years"`, `"3-5 years experience"`
-- Returns `Optional[int]` (lowest bound)
-
-### 4.3 German Proficiency
-- Regex classifies into enumerated tiers:
-  - `MANDATORY_C1_PLUS` — fluent/native/C1/C2 required
-  - `PREFERRED_B1_B2` — intermediate preferred
-  - `OPTIONAL_A1_A2` — basic/beginner mentioned
-  - `UNKNOWN` — no German signals detected
-
-**Constraint**: LLM will only evaluate these extracted strings/integers. It is forbidden from independently searching for or inventing contact details.
+### Candidate Profile Safety Gate
+To protect the candidate's professional reputation, the system enforces a strict runtime barrier:
+1. `assert_profile_ready_for_dispatch("profile")` runs before any email dispatch.
+2. Checks for dummy emails (`example.com`, `your-email@`), placeholder companies (`Example Corp`), fake universities, and placeholder summaries (`TODO`, `Placeholder`).
+3. If placeholders are detected, `ProfileValidationError` is raised, execution is aborted, and zero external communications are sent.
 
 ---
 
-## 5. Gemini Matcher Contract
+## 4. International Job Source Adapters
 
-### Input
-- Candidate `profile.json`
-- Job description text
-- Deterministic facts (emails, experience, language tier)
+All source adapters inherit from `JobSourceAdapter` and produce normalized `RawJobPosting` instances:
 
-### Output
-Strictly structured JSON:
-```json
-{
-  "score": 78,
-  "method": "gemini-2.5-flash",
-  "tech_matches": ["Python", "PostgreSQL", "Docker"],
-  "gaps": ["Kubernetes", "Go"],
-  "tailored_cv_bullets": [
-    "profile.experience[exp_techcorp].responsibilities[0]",
-    "profile.projects[project_dashboard]"
-  ],
-  "cover_letter_pitch": "2-3 sentence tailored pitch..."
-}
-```
-
-**Constraint**: API call must execute independently. Open database transactions are forbidden during LLM network requests.
+1. **ArbeitnowAdapter (`src/collectors/arbeitnow.py`):**
+   - European and global technical jobs API with pagination and exponential backoff retry.
+2. **JobicyAdapter (`src/collectors/jobicy.py`):**
+   - Global remote jobs feed filtering for technical engineering and AI positions.
+3. **GreenhousePublicAdapter (`src/collectors/ats_boards.py`):**
+   - Direct integration with public Greenhouse job boards for AI companies.
+4. **URL Normalizer (`src/normalizers/url.py`):**
+   - Canonicalizes URLs by stripping tracking queries (`utm_*`, `ref`, `gh_src`, `fbclid`). Preserves essential routing parameters.
 
 ---
 
-## 6. Telegram Webhook Security Model
+## 5. International Eligibility & Seniority Engine
 
-The Supabase Edge Function acts solely as a **queue mutator**.
+### Location & India Eligibility (`src/evaluators/eligibility.py`)
+- `WORLDWIDE_REMOTE`: Explicit worldwide remote ("Anywhere", "Worldwide", "Global"). Fully eligible from India.
+- `INDIA_ELIGIBLE_REMOTE`: Jobs mentioning India or APAC remote regions. Fully eligible.
+- `RELOCATION_SUPPORTED`: Roles offering visa sponsorship or relocation assistance to Europe/Germany. Fully eligible as a relocation pathway.
+- `COUNTRY_RESTRICTED`: Remote restricted to US-only, UK-only, or non-EU countries without sponsorship. Hard-rejected.
+- `GERMANY_REMOTE_ONLY`: Remote within Germany only, without international allowance.
 
-1. **Verification**: Validates `chat_id` against `MY_TELEGRAM_CHAT_ID` environment variable
-2. **Payload**: Expects strict `approve:<UUID>` format
-3. **Mutation**: Updates `action_queue` to `APPROVED_FOR_DISPATCH` only if current status is `QUEUED`
-4. **Constraint**: The webhook does NOT execute SMTP operations
+### Seniority Classification (`src/evaluators/seniority.py`)
+- Target: 0–1 years, Fresher, Graduate, Entry-Level, Junior, Intern, Working Student.
+- Rejection: Titles containing `Senior`, `Lead`, `Staff`, `Principal`, `Head of`, `Director`, `VP`, `Manager`, or requiring $\ge 3$ years of experience are immediately hard-rejected.
 
----
-
-## 7. Dispatch and Idempotency Model
-
-1. **Worker Consumption**: GitHub Actions cron job queries `action_queue WHERE status = 'APPROVED_FOR_DISPATCH'`
-2. **Rate Limit**: Maximum **5 emails per cron run** (15-minute interval) to protect Gmail reputation
-3. **Execution Lock**: Updates status to `EXECUTING`
-4. **Idempotency**: Validates `action_queue.idempotency_key` against external dispatch history
-5. **Confirmation**: Only upon successful SMTP 200 OK does status change to `DONE` and application state to `SENT`
-6. **Timeouts**: SMTP timeout reverts status to `APPROVED_FOR_DISPATCH` for retry, preserving the original idempotency key
-
----
-
-## 8. CV Generation Integrity Rules
-
-- `cv_builder.py` injects `tailored_cv_bullets` directly into a `.tex` template
-- **LaTeX Compilation**: Uses `xu-cheng/latex-action` GitHub Action (Docker-based, zero config)
-- **Integrity Constraint**: Bullets provided by Gemini must strictly map to entities within `profile/projects.json` and `profile/experience.json`. Synthesizing unverified employers, tools, or responsibilities is a system violation.
+### Language Compatibility (`src/evaluators/languages.py`)
+- Candidate proficiency: English (Fluent/C2), German (Basic/A1).
+- `ENGLISH_ONLY`: 100% compatible.
+- `ENGLISH_AND_BASIC_GERMAN_ACCEPTED`: 95% compatible.
+- `ENGLISH_REQUIRED_GERMAN_PREFERRED`: 85% compatible.
+- `GERMAN_REQUIRED_C1_PLUS`: Hard-rejected. Candidate does not meet mandatory advanced German requirements.
 
 ---
 
-## 9. GitHub Actions Responsibilities
+## 6. Multi-Dimensional Semantic Matcher
 
-| Workflow          | Schedule          | Responsibility                                               |
-|-------------------|-------------------|--------------------------------------------------------------|
-| `collect.yml`     | Every 1 hour      | Collectors + deterministic pipeline + LLM + Telegram cards   |
-| `dispatch.yml`    | Every 15 minutes  | Process `APPROVED_FOR_DISPATCH` queue items (max 5/run)      |
-| `followup.yml`    | Daily             | Flag `SENT` applications older than 7 days for review        |
+### Scoring Formula
 
----
+$$\text{Overall Score} = 0.40 \times \text{Tech} + 0.25 \times \text{Exp} + 0.20 \times \text{Loc} + 0.15 \times \text{Lang}$$
 
-## 10. Secret Management
+- **Technical Score (0–100):** Overlap between candidate verified skills/projects and job requirements.
+- **Experience Score (0–100):** Entry/Junior/Working Student = 100; Unknown = 70; Senior = 0.
+- **Location Score (0–100):** Worldwide Remote = 100; India Remote = 100; Relocation = 85; Unknown = 40; Country Restricted = 0.
+- **Language Score (0–100):** English Only = 100; English + Basic German = 95; German Preferred = 85; German A1/A2 = 80; German C1+ = 0.
 
-Secrets (`DATABASE_URL`, `BOT_TOKEN`, `GEMINI_API_KEY`, `GMAIL_APP_PASSWORD`) are strictly isolated in GitHub Repository Secrets and Supabase Vault. No hardcoded credentials.
+### Hard Gate Fast-Fails
+Before invoking Gemini, deterministic hard gates verify:
+1. Seniority is acceptable (`seniority.is_acceptable`).
+2. India eligibility or relocation pathway exists.
+3. German C1+ is not mandatory.
 
-| Secret                    | Storage                  | Access Scope         |
-|---------------------------|--------------------------|----------------------|
-| `SUPABASE_URL`            | GitHub Actions Secret    | Python workers       |
-| `SUPABASE_SERVICE_KEY`    | GitHub Actions Secret    | Python workers       |
-| `TELEGRAM_BOT_TOKEN`      | Supabase Vault           | Edge Function only   |
-| `MY_TELEGRAM_CHAT_ID`     | Supabase Vault           | Edge Function only   |
-| `GEMINI_API_KEY`          | GitHub Actions Secret    | Python workers       |
-| `GMAIL_APP_PASSWORD`      | GitHub Actions Secret    | Dispatcher only      |
-| `GMAIL_SENDER_ADDRESS`    | GitHub Actions Secret    | Dispatcher only      |
+If any hard gate fails, the evaluator immediately returns `verdict="REJECT"` and `overall_match_score=0` without burning Gemini API tokens.
 
 ---
 
-## 11. Resolved Decisions
+## 7. Truthful CV Generation & Claim Provenance
 
-| Decision              | Resolution                                                |
-|-----------------------|-----------------------------------------------------------|
-| Dispatch Rate Limit   | Cap at **5 emails per 15-minute cron run**                |
-| LaTeX Environment     | Use **`xu-cheng/latex-action`** GitHub Action (Docker)    |
-
----
-
-## 12. File Manifest
-
-```
-jobseeker/
-├── .agents/
-│   ├── agents.md
-│   └── skills/
-│       ├── spec_driven.md
-│       ├── audit_code.md
-│       └── job_hunter_stack.md
-├── .github/
-│   └── workflows/
-│       ├── collect.yml
-│       ├── dispatch.yml
-│       └── followup.yml
-├── src/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── db/
-│   │   ├── __init__.py
-│   │   └── client.py
-│   ├── evaluators/
-│   │   ├── __init__.py
-│   │   └── extraction.py
-│   ├── matcher/
-│   │   ├── __init__.py
-│   │   └── gemini.py
-│   ├── cv/
-│   │   ├── __init__.py
-│   │   ├── builder.py
-│   │   └── templates/
-│   │       └── base.tex
-│   ├── dispatcher/
-│   │   ├── __init__.py
-│   │   └── mailer.py
-│   └── collectors/
-│       ├── __init__.py
-│       └── scraper.py
-├── supabase/
-│   └── functions/
-│       └── telegram-webhook/
-│           └── index.ts
-├── profile/
-│   ├── profile.json
-│   ├── projects.json
-│   └── experience.json
-├── tests/
-│   ├── __init__.py
-│   ├── test_extraction.py
-│   ├── test_state_machine.py
-│   └── test_idempotency.py
-├── schema.sql
-├── requirements.txt
-├── pytest.ini
-├── .env.example
-├── .gitignore
-└── README.md
-```
+1. **LaTeX CV Template:** High-standard professional CV compiled using ModernCV / LaTeX engine.
+2. **Provenance Audit (`src/cv/provenance.py`):**
+   - Every bullet in the compiled CV is mapped directly back to a verified key in `experience.json` or `projects.json`.
+   - Generates `<job_id>_provenance.json` detailing the exact source file and section for every claim.
+3. **PDF Validator (`src/cv/pdf_validator.py`):**
+   - Asserts valid `%PDF-` header and `%%EOF` marker.
+   - Rejects dummy mock files or truncated PDFs (< 2KB).
 
 ---
 
-## 13. Milestone Breakdown
+## 8. Telegram Control Plane & Action Queue
 
-| Milestone | Scope                                                    | Status |
-|-----------|----------------------------------------------------------|--------|
-| **M1**    | Agent config + Technical Specification                   | ✅      |
-| **M2**    | `schema.sql` + `src/db/` + `src/evaluators/` + tests    | 🔲      |
-| **M3**    | `supabase/functions/telegram-webhook/`                   | 🔲      |
-| **M4**    | Collectors + Matcher + CV + Dispatcher + GH Workflows    | 🔲      |
+### Interactive Card Format
+Telegram cards display:
+- Job Title, Company, Location, Source.
+- Match Breakdown: Overall Score, Technical Overlap, Experience Fit, Location Eligibility, Language Compatibility.
+- India Eligibility Badge (`🇮🇳 Remote from India Eligible` or `✈️ Relocation Pathway`).
+- Extracted Hiring Email or Application Portal Link.
+- Key Matched Projects and Skills.
+- Tailored Pitch Preview.
+
+### Dual-Action Inline Keyboard
+- For Email Roles: `[🚀 Approve & Send]` | `[❌ Reject]`
+- For Portal Roles: `[🌐 Open Portal]` | `[✅ Applied Manually]` | `[❌ Reject]`
+
+---
+
+## 9. Observability & Run Summary
+
+Every pipeline run prints and logs an auditable `RunSummary`:
+- Sources attempted vs. successful.
+- Total jobs fetched, duplicates skipped, and jobs inserted.
+- Hard gate rejections breakdown (seniority, restricted countries, German C1+).
+- India-eligible vs. relocation opportunities discovered.
+- CVs generated and Telegram approval cards sent.
