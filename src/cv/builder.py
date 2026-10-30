@@ -1,15 +1,8 @@
 """
-LaTeX CV Builder for Job Hunter v1.
+LaTeX CV Builder for Job Hunter v2.
 
 Compiles tailored CVs by selecting profile entries referenced
-in Gemini's tailored_cv_bullets output.
-
-Spec Reference: Technical_Specification.md §8
-
-Invariants:
-  - ONLY entries present in profile/projects.json and profile/experience.json may appear.
-  - Zero synthesized experience. Fabricating employers, tools, or responsibilities is FORBIDDEN.
-  - LaTeX compilation uses xu-cheng/latex-action in CI; subprocess pdflatex locally.
+in Gemini's tailored_cv_bullets output and recording strict provenance mapping.
 """
 
 import json
@@ -21,7 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.matcher.gemini import load_profile
+from src.profiles.loader import load_candidate_profile, load_profile_as_dict
+from src.cv.provenance import CVProvenanceAudit, validate_tex_content
+from src.cv.pdf_validator import validate_compiled_pdf, PDFValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -95,19 +90,9 @@ def _resolve_bullet_references(
     bullets: List[str],
     profile: Dict[str, Any],
 ) -> Dict[str, List[str]]:
-    """
-    Resolve Gemini's tailored_cv_bullets to actual profile entries.
-
-    Bullets are direct string keys (e.g., "exp_example").
-    Only entries with keys that EXIST in the profile are included.
-
-    Returns:
-        Dict with 'experience_keys' and 'project_keys' lists.
-    """
     experience_keys: List[str] = []
     project_keys: List[str] = []
 
-    # Build lookup sets from actual profile data
     valid_exp_keys = {
         entry.get("key") for entry in profile.get("experience", [])
         if entry.get("key")
@@ -119,7 +104,6 @@ def _resolve_bullet_references(
 
     for key in bullets:
         key = key.strip()
-
         if key in valid_exp_keys:
             experience_keys.append(key)
         elif key in valid_proj_keys:
@@ -132,10 +116,6 @@ def _resolve_bullet_references(
         "project_keys": project_keys,
     }
 
-
-# ============================================================
-# LaTeX Content Builders
-# ============================================================
 
 def _escape_latex(text: str) -> str:
     """Escape special LaTeX characters."""
@@ -158,17 +138,17 @@ def _escape_latex(text: str) -> str:
 def _build_experience_section(
     profile: Dict[str, Any],
     highlighted_keys: List[str],
+    provenance: Optional[CVProvenanceAudit] = None,
 ) -> str:
-    """Build LaTeX experience entries, prioritizing highlighted keys."""
     entries = profile.get("experience", [])
     lines: List[str] = []
 
-    # Sort: highlighted first, then by date
     highlighted = [e for e in entries if e.get("key") in highlighted_keys]
     others = [e for e in entries if e.get("key") not in highlighted_keys]
     ordered = highlighted + others
 
     for entry in ordered:
+        key = entry.get("key", "exp_unknown")
         company = _escape_latex(entry.get("company", ""))
         role = _escape_latex(entry.get("role", ""))
         start = entry.get("start_date", "")
@@ -181,9 +161,15 @@ def _build_experience_section(
         lines.append("\\begin{itemize}")
         for resp in responsibilities:
             lines.append(f"  \\item {_escape_latex(resp)}")
+            if provenance:
+                provenance.record_claim("experience", resp, "profile/experience.json", key)
+
         if techs:
             tech_str = ", ".join(_escape_latex(t) for t in techs)
             lines.append(f"  \\item \\textit{{Technologies: {tech_str}}}")
+            if provenance:
+                provenance.record_claim("experience_techs", tech_str, "profile/experience.json", key)
+
         lines.append("\\end{itemize}")
         lines.append("\\vspace{4pt}")
 
@@ -193,8 +179,8 @@ def _build_experience_section(
 def _build_project_section(
     profile: Dict[str, Any],
     highlighted_keys: List[str],
+    provenance: Optional[CVProvenanceAudit] = None,
 ) -> str:
-    """Build LaTeX project entries, prioritizing highlighted keys."""
     entries = profile.get("projects", [])
     lines: List[str] = []
 
@@ -203,6 +189,7 @@ def _build_project_section(
     ordered = highlighted + others
 
     for entry in ordered:
+        key = entry.get("key", "proj_unknown")
         name = _escape_latex(entry.get("name", ""))
         description = _escape_latex(entry.get("description", ""))
         techs = entry.get("technologies", [])
@@ -211,33 +198,33 @@ def _build_project_section(
 
         lines.append(f"\\textbf{{{name}}} \\hfill {year}")
         lines.append(f"\\\\{description}")
+        if provenance:
+            provenance.record_claim("project_summary", description, "profile/projects.json", key)
+
         if highlights:
             lines.append("\\begin{itemize}")
             for h in highlights:
                 lines.append(f"  \\item {_escape_latex(h)}")
+                if provenance:
+                    provenance.record_claim("project_highlight", h, "profile/projects.json", key)
             lines.append("\\end{itemize}")
+
         if techs:
             tech_str = ", ".join(_escape_latex(t) for t in techs)
             lines.append(f"\\textit{{Stack: {tech_str}}}")
+
         lines.append("\\vspace{4pt}")
 
     return "\n".join(lines)
 
 
-# ============================================================
-# CV Builder
-# ============================================================
-
 class CVBuilder:
-    """
-    LaTeX CV compiler.
-
-    Generates tailored CVs by selecting and ordering profile entries
-    based on Gemini's recommendations, while enforcing source integrity.
-    """
+    """LaTeX CV compiler with auditable provenance."""
 
     def __init__(self, profile_dir: str = "profile", output_dir: str = "output"):
-        self._profile = load_profile(profile_dir)
+        self._profile_dir = profile_dir
+        self._candidate_profile = load_candidate_profile(profile_dir)
+        self._profile_dict = load_profile_as_dict(profile_dir)
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
         logger.info("CVBuilder initialized (output=%s)", output_dir)
@@ -250,65 +237,49 @@ class CVBuilder:
         compile_pdf: bool = True,
     ) -> str:
         """
-        Generate a tailored CV PDF.
-
-        Args:
-            job_id: Job identifier for output filename.
-            tailored_cv_bullets: Gemini's profile entry references.
-            job_title: Optional job title for logging.
-
-        Returns:
-            Path to the generated PDF file.
-
-        Raises:
-            RuntimeError: If LaTeX compilation fails.
+        Generate a tailored CV LaTeX document and optional PDF.
+        Records provenance mapping for every claim.
         """
-        # Resolve bullet references against actual profile
-        resolved = _resolve_bullet_references(tailored_cv_bullets, self._profile)
+        provenance = CVProvenanceAudit(job_id, self._candidate_profile)
+        resolved = _resolve_bullet_references(tailored_cv_bullets, self._profile_dict)
 
-        # Build LaTeX content
-        profile_data = self._profile.get("profile", {})
         latex = _LATEX_TEMPLATE
-        latex = latex.replace("<<NAME>>", _escape_latex(profile_data.get("name", "Candidate")))
-        latex = latex.replace("<<TITLE>>", _escape_latex(profile_data.get("title", "")))
-        latex = latex.replace("<<EMAIL>>", _escape_latex(profile_data.get("email", "")))
-        latex = latex.replace("<<LOCATION>>", _escape_latex(profile_data.get("location", "")))
-        latex = latex.replace("<<SUMMARY>>", _escape_latex(profile_data.get("summary", "")))
+        latex = latex.replace("<<NAME>>", _escape_latex(self._candidate_profile.name))
+        latex = latex.replace("<<TITLE>>", _escape_latex(self._candidate_profile.title))
+        latex = latex.replace("<<EMAIL>>", _escape_latex(self._candidate_profile.email))
+        latex = latex.replace("<<LOCATION>>", _escape_latex(self._candidate_profile.location))
+        latex = latex.replace("<<SUMMARY>>", _escape_latex(self._candidate_profile.summary))
+        provenance.record_claim("summary", self._candidate_profile.summary, "profile/profile.json", "profile_summary")
 
-        # Skills
-        skills = profile_data.get("skills", [])
+        skills = self._candidate_profile.skills
         skills_str = ", ".join(_escape_latex(s) for s in skills) if skills else "N/A"
         latex = latex.replace("<<SKILLS>>", skills_str)
+        provenance.record_claim("skills", skills_str, "profile/profile.json", "profile_skills")
 
-        # Experience (highlighted entries first)
-        exp_section = _build_experience_section(
-            self._profile, resolved["experience_keys"]
-        )
+        exp_section = _build_experience_section(self._profile_dict, resolved["experience_keys"], provenance)
         latex = latex.replace("<<EXPERIENCE_ENTRIES>>", exp_section)
 
-        # Projects (highlighted entries first)
-        proj_section = _build_project_section(
-            self._profile, resolved["project_keys"]
-        )
+        proj_section = _build_project_section(self._profile_dict, resolved["project_keys"], provenance)
         latex = latex.replace("<<PROJECT_ENTRIES>>", proj_section)
 
-        # Education
-        education = profile_data.get("education", [])
         edu_lines = []
-        for edu in education:
-            degree = _escape_latex(edu.get("degree", ""))
-            institution = _escape_latex(edu.get("institution", ""))
-            year = edu.get("year", "")
+        for edu in self._candidate_profile.education:
+            degree = _escape_latex(edu.degree)
+            institution = _escape_latex(edu.institution)
+            year = edu.year
             edu_lines.append(f"\\textbf{{{degree}}} — {institution} \\hfill {year}")
+            provenance.record_claim("education", f"{degree} from {institution}", "profile/profile.json", "profile_education")
         latex = latex.replace("<<EDUCATION>>", "\n\n".join(edu_lines) if edu_lines else "N/A")
 
-        # Languages
-        languages = profile_data.get("languages", [])
         lang_parts = [
-            f"{_escape_latex(l.get('language', ''))}: {_escape_latex(l.get('level', ''))}"
-            for l in languages
+            f"{_escape_latex(l.language)}: {_escape_latex(l.level)}"
+            for l in self._candidate_profile.languages
         ]
         latex = latex.replace("<<LANGUAGES>>", " \\quad | \\quad ".join(lang_parts) if lang_parts else "N/A")
+
+        # Save provenance audit artifact
+        prov_path = self._output_dir / f"{job_id[:16]}_provenance.json"
+        provenance.save(prov_path)
 
         # Write .tex file
         tex_path = self._output_dir / f"{job_id[:16]}_cv.tex"
@@ -319,7 +290,6 @@ class CVBuilder:
 
         logger.info("Generated LaTeX: %s (for job: %s)", tex_path, job_title or job_id[:12])
 
-        # Compile to PDF (local only — CI uses xu-cheng/latex-action)
         if compile_pdf:
             try:
                 result = subprocess.run(
@@ -333,14 +303,13 @@ class CVBuilder:
                     raise RuntimeError(f"LaTeX compilation failed: {result.stderr[-500:]}")
             except FileNotFoundError:
                 logger.warning(
-                    "pdflatex not found locally. .tex file saved at %s. "
-                    "Use xu-cheng/latex-action in CI to compile.",
+                    "pdflatex not found locally. .tex file saved at %s. Use xu-cheng/latex-action in CI.",
                     tex_path,
                 )
                 return str(tex_path)
 
-            logger.info("Compiled PDF: %s", pdf_path)
+            validate_compiled_pdf(pdf_path)
+            logger.info("Compiled and validated PDF: %s", pdf_path)
             return str(pdf_path)
         else:
-            logger.info("compile_pdf=False: Skipping local compilation. Returning .tex path.")
             return str(tex_path)
