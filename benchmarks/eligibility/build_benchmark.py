@@ -1,0 +1,1247 @@
+"""
+Builder script to generate the 100-job eligibility benchmark dataset.
+"""
+
+import json
+from pathlib import Path
+
+cases = [
+    # =========================================================================
+    # Group 1: Worldwide Remote (18 cases)
+    # =========================================================================
+    {
+        "id": "BENCH-001",
+        "title": "Junior Python / AI Engineer",
+        "company": "GitLab Inc.",
+        "location": "Remote - Worldwide",
+        "description": "We are a fully distributed company. You can work from anywhere in the world as long as you have internet.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-002",
+        "title": "LLM Application Developer",
+        "company": "Automattic",
+        "location": "Anywhere",
+        "description": "Work from anywhere in the world! We believe in hiring the best talent regardless of geographic location.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-003",
+        "title": "Junior Backend AI Engineer",
+        "company": "Buffer",
+        "location": "Worldwide",
+        "description": "This is a worldwide remote role. We evaluate candidates across all timezones.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-004",
+        "title": "AI Systems Engineer",
+        "company": "Kraken",
+        "location": "Global",
+        "description": "We are hiring globally. Join our team from any country or timezone.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-005",
+        "title": "Generative AI Developer",
+        "company": "Zapier",
+        "location": "Remote - Anywhere",
+        "description": "100% remote worldwide. Work from any location that suits your lifestyle.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-006",
+        "title": "Associate ML Engineer",
+        "company": "Hotjar",
+        "location": "Remote",
+        "description": "We are a fully distributed worldwide team building intelligent analytics tooling. Work anywhere in the world.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-007",
+        "title": "Prompt Engineer & LLM Evaluator",
+        "company": "Invisible Tech",
+        "location": "Global Remote",
+        "description": "Global remote position open to applicants anywhere in the world. Asynchronous workflow.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-008",
+        "title": "Junior Python Developer",
+        "company": "Doist",
+        "location": "Anywhere in the World",
+        "description": "Work from anywhere in the world. We offer competitive international compensation via EOR.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-009",
+        "title": "Junior AI Research Assistant",
+        "company": "Turing",
+        "location": "Worldwide Remote",
+        "description": "Worldwide remote. Work with leading foundational model researchers across any timezone.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-010",
+        "title": "NLP Engineer - Early Career",
+        "company": "DuckDuckGo",
+        "location": "Remote - Anywhere",
+        "description": "We hire anywhere in the world. Our team spans over 40 countries.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-011",
+        "title": "AI Integration Specialist",
+        "company": "Basecamp",
+        "location": "Remote - Global",
+        "description": "We are hiring globally. Work from anywhere with no mandatory office presence.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-012",
+        "title": "Python Developer - AI Agents",
+        "company": "SuperTokens",
+        "location": "Anywhere",
+        "description": "Remote worldwide. We welcome applications from passionate developers across the globe.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-013",
+        "title": "Junior AI Solutions Architect",
+        "company": "Remotebase",
+        "location": "Global",
+        "description": "Work from any location. Fully remote worldwide engagement.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-014",
+        "title": "Machine Learning Associate",
+        "company": "TestRail",
+        "location": "Worldwide",
+        "description": "Work from anywhere in the world. We offer flexible hours in any timezone.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-015",
+        "title": "AI Prompt & Python Developer",
+        "company": "Mindstone",
+        "location": "Remote - Anywhere",
+        "description": "Remote - anywhere. Build next-generation learning interfaces powered by LLMs.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-016",
+        "title": "Software Engineer - GenAI",
+        "company": "Ghost Foundation",
+        "location": "Anywhere",
+        "description": "We are a fully distributed worldwide non-profit. Work from anywhere in the world.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-017",
+        "title": "Junior AI Tools Engineer",
+        "company": "Prisma",
+        "location": "Remote Worldwide",
+        "description": "Remote worldwide. We encourage applicants from all backgrounds and geographies.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-018",
+        "title": "Full Stack AI Apprentice",
+        "company": "PostHog",
+        "location": "Global",
+        "description": "Hiring globally. Work from anywhere in the world. Transparent compensation and culture.",
+        "is_remote": True,
+        "category_group": "Worldwide Remote",
+        "expected_category": "WORLDWIDE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+
+    # =========================================================================
+    # Group 2: India-Specific Remote / APAC Remote (14 cases)
+    # =========================================================================
+    {
+        "id": "BENCH-019",
+        "title": "Junior Python Developer",
+        "company": "Razorpay",
+        "location": "Remote in India",
+        "description": "This role is 100% remote in India. Build scalable financial APIs with FastAPI and PostgreSQL.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-020",
+        "title": "AI Research Engineer",
+        "company": "Hasura",
+        "location": "India Remote",
+        "description": "India remote position. Work on cutting-edge GraphQL and generative AI tools.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-021",
+        "title": "Early Career AI Engineer",
+        "company": "Postman",
+        "location": "Bengaluru / India Remote",
+        "description": "We are open to candidates in India. Develop AI-assisted API testing frameworks.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-022",
+        "title": "Junior Python Backend Developer",
+        "company": "BrowserStack",
+        "location": "Remote - India",
+        "description": "Remote - India. Candidate must be based in India to join our engineering division.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-023",
+        "title": "LLM Fine-tuning Engineer",
+        "company": "Observe.ai",
+        "location": "India or Remote",
+        "description": "India or remote. Optimize open-source foundation models for enterprise contact centers.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-024",
+        "title": "AI Automation Specialist",
+        "company": "Atlassian",
+        "location": "APAC Remote",
+        "description": "APAC remote opportunity. Collaborate with teams across India, Australia, and Singapore.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-025",
+        "title": "Junior ML Ops Engineer",
+        "company": "Canva",
+        "location": "Asia Remote",
+        "description": "Asia remote. Help scale generative image models and infrastructure across APAC region.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-026",
+        "title": "Data & AI Pipeline Engineer",
+        "company": "ThoughtSpot",
+        "location": "India Remote",
+        "description": "India remote. Build natural language search interfaces over large relational schemas.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-027",
+        "title": "Prompt & Evaluation Engineer",
+        "company": "InMobi",
+        "location": "Remote in India",
+        "description": "Remote in India. Develop quantitative benchmark suites for marketing LLM agents.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-028",
+        "title": "Junior AI Platform Engineer",
+        "company": "Freshworks",
+        "location": "Chennai / Remote",
+        "description": "Open to candidates in India. Help integrate Freddy AI across SaaS modules.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-029",
+        "title": "Full Stack LLM Developer",
+        "company": "Scribe Software",
+        "location": "APAC Region",
+        "description": "APAC region remote role. Strong Python, TypeScript, and prompt evaluation skills required.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-030",
+        "title": "Python AI Trainee",
+        "company": "Wingify",
+        "location": "Remote - India",
+        "description": "Remote - India. Learn and contribute to VWO predictive analytics models.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-031",
+        "title": "AI Backend Engineer",
+        "company": "Chargebee",
+        "location": "India Remote",
+        "description": "India remote. Integrate Stripe, PayPal, and conversational billing agents.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+    {
+        "id": "BENCH-032",
+        "title": "Generative AI Intern",
+        "company": "Yellow.ai",
+        "location": "Remote in India",
+        "description": "Remote in India. Hands-on experience fine-tuning conversational voice and text bots.",
+        "is_remote": True,
+        "category_group": "India Eligible Remote",
+        "expected_category": "INDIA_ELIGIBLE_REMOTE",
+        "expected_actionability": "CONFIRMED_ELIGIBLE",
+        "expected_can_apply_from_india": True
+    },
+
+    # =========================================================================
+    # Group 3: Relocation Supported with Visa Sponsorship (14 cases)
+    # =========================================================================
+    {
+        "id": "BENCH-033",
+        "title": "Junior AI Software Engineer",
+        "company": "Delivery Hero",
+        "location": "Berlin, Germany",
+        "description": "Join us in Berlin! Comprehensive relocation package and visa sponsorship provided for international candidates.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-034",
+        "title": "Machine Learning Engineer",
+        "company": "Zalando SE",
+        "location": "Berlin, Germany",
+        "description": "Relocate to Berlin. We sponsor visas and provide full relocation assistance including flight and temporary housing.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-035",
+        "title": "Junior Python Developer",
+        "company": "HelloFresh",
+        "location": "Berlin, Germany",
+        "description": "We offer Blue Card sponsorship and complete relocation support to Germany.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-036",
+        "title": "AI Backend Engineer",
+        "company": "Personio",
+        "location": "Munich, Germany",
+        "description": "We sponsor visas for international engineers joining our Munich headquarters. Relocation package included.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-037",
+        "title": "Junior Data & AI Engineer",
+        "company": "Booking.com",
+        "location": "Amsterdam, Netherlands",
+        "description": "Relocation support provided. Visa sponsorship available for qualified non-EU applicants.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-038",
+        "title": "AI Research Scientist",
+        "company": "DeepL",
+        "location": "Cologne, Germany",
+        "description": "We provide full visa sponsorship and help with relocation to Germany.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-039",
+        "title": "Associate LLM Engineer",
+        "company": "Klarna",
+        "location": "Stockholm, Sweden",
+        "description": "Relocation assistance and work visa sponsorship provided to join our Stockholm office.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-040",
+        "title": "Junior Python Developer",
+        "company": "Tier Mobility",
+        "location": "Berlin, Germany",
+        "description": "Support your relocation with visa sponsorship, flight booking, and German bureaucratic guidance.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-041",
+        "title": "Computer Vision Engineer",
+        "company": "Babbel",
+        "location": "Berlin, Germany",
+        "description": "Relocate to Europe. We sponsor visa applications for exceptional engineers.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-042",
+        "title": "Junior AI Specialist",
+        "company": "N26",
+        "location": "Berlin, Germany",
+        "description": "Visa sponsorship available for engineers willing to relocate to Berlin.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-043",
+        "title": "NLP Software Engineer",
+        "company": "FlixMobility",
+        "location": "Munich, Germany",
+        "description": "Relocate to Munich with full relocation assistance and EU Blue Card sponsorship.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-044",
+        "title": "Junior AI Architect",
+        "company": "ASML",
+        "location": "Veldhoven, Netherlands",
+        "description": "We offer international relocation package and visa sponsorship for non-EU specialists.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-045",
+        "title": "AI Systems Trainee",
+        "company": "Siemens AG",
+        "location": "Munich, Germany",
+        "description": "Relocation support provided. We sponsor visas for international engineering graduates.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-046",
+        "title": "Backend AI Developer",
+        "company": "Spotify",
+        "location": "Stockholm, Sweden",
+        "description": "Relocation assistance available. Visa sponsorship provided for candidates outside the EU.",
+        "is_remote": False,
+        "category_group": "Relocation + Sponsorship",
+        "expected_category": "RELOCATION_SUPPORTED",
+        "expected_actionability": "RELOCATION_PATHWAY",
+        "expected_can_apply_from_india": False
+    },
+
+    # =========================================================================
+    # Group 4: Relocation Requiring Existing Work Auth / No Sponsorship (10 cases)
+    # =========================================================================
+    {
+        "id": "BENCH-047",
+        "title": "Junior Python Developer",
+        "company": "FinTech Berlin",
+        "location": "Berlin, Germany",
+        "description": "Relocation assistance provided within Germany. Must have existing work authorization in the EU. We cannot sponsor visas.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-048",
+        "title": "AI Application Developer",
+        "company": "MedTech Munich",
+        "location": "Munich, Germany",
+        "description": "Relocation package available. Candidates must hold a valid German work permit; no visa sponsorship provided.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-049",
+        "title": "Machine Learning Associate",
+        "company": "London AI Labs",
+        "location": "London, UK",
+        "description": "Relocation support within UK. Right to work in the UK required. Unable to sponsor visas.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-050",
+        "title": "Junior Python / AI Engineer",
+        "company": "Nordic AI",
+        "location": "Stockholm, Sweden",
+        "description": "We offer relocation assistance, but we do not offer visa sponsorship. Must have existing work authorization.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-051",
+        "title": "Early Career Data Scientist",
+        "company": "AutoDrive GmbH",
+        "location": "Stuttgart, Germany",
+        "description": "Help with relocation available for domestic candidates. No visa sponsorship; right to work in Germany required.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-052",
+        "title": "AI Cloud Engineer",
+        "company": "EuroTelecom",
+        "location": "Frankfurt, Germany",
+        "description": "Relocation package provided. Right to work in the EU required. We cannot sponsor visas at this time.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-053",
+        "title": "Junior NLP Engineer",
+        "company": "Oxford NLP",
+        "location": "Oxford, UK",
+        "description": "Relocation support available for UK movers. Applicants must possess unrestricted right to work in the UK. No visa sponsorship.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-054",
+        "title": "Prompt Engineer",
+        "company": "SwissAI Solutions",
+        "location": "Zurich, Switzerland",
+        "description": "Relocation assistance available. Swiss or EU work permit required; unable to sponsor visas.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-055",
+        "title": "Junior Backend AI Specialist",
+        "company": "BioInformatics Berlin",
+        "location": "Berlin, Germany",
+        "description": "Relocation support offered. Must have existing work authorization in Germany. No visa sponsorship.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-056",
+        "title": "Generative AI Trainee",
+        "company": "Hamburg Analytics",
+        "location": "Hamburg, Germany",
+        "description": "Relocation package for internal transfers. Candidate must have existing work authorization in the EU.",
+        "is_remote": False,
+        "category_group": "Relocation without Sponsorship",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+
+    # =========================================================================
+    # Group 5: Explicit India Exclusions / Entity Limits (12 cases)
+    # =========================================================================
+    {
+        "id": "BENCH-057",
+        "title": "Full Stack AI Developer",
+        "company": "Global Distributed Corp",
+        "location": "Remote - Worldwide",
+        "description": "Worldwide remote, but we cannot hire candidates in India due to payroll and legal limitations.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-058",
+        "title": "Junior Python Engineer",
+        "company": "CloudScale Inc.",
+        "location": "Remote Worldwide",
+        "description": "Remote worldwide (excluding India and Philippines).",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-059",
+        "title": "AI Operations Specialist",
+        "company": "RemoteFirst Tech",
+        "location": "Anywhere",
+        "description": "Anywhere in the world, not open to candidates based in India at this time.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-060",
+        "title": "LLM Integration Engineer",
+        "company": "NextGen AI",
+        "location": "Global Remote",
+        "description": "Global remote. Unfortunately, India is not an eligible hiring country for our entity structure.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-061",
+        "title": "Junior Machine Learning Engineer",
+        "company": "AutomateWorld",
+        "location": "Remote - Anywhere",
+        "description": "Remote anywhere, applicants must not be located in India.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-062",
+        "title": "AI Backend Developer",
+        "company": "SaaS Matrix",
+        "location": "Worldwide Remote",
+        "description": "Worldwide remote — Ineligible: India, Brazil, Russia.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-063",
+        "title": "Python AI Prompt Engineer",
+        "company": "CyberSecure AI",
+        "location": "Global",
+        "description": "Work from anywhere in the world, except India where we do not have tax compliance.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-064",
+        "title": "Junior Deep Learning Engineer",
+        "company": "VisionCore",
+        "location": "Worldwide",
+        "description": "We are hiring globally. Note: We are unable to hire candidates from India due to regulatory requirements.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-065",
+        "title": "AI Workflow Automation Engineer",
+        "company": "SmartFlow",
+        "location": "Remote",
+        "description": "Work from anywhere. However, India is not an approved hiring country.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-066",
+        "title": "Junior AI Evaluator",
+        "company": "PromptCrafters",
+        "location": "Global Remote",
+        "description": "Fully distributed worldwide. We can't hire in India currently.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-067",
+        "title": "Software Engineer - AI Systems",
+        "company": "OmniData",
+        "location": "Anywhere",
+        "description": "Any timezone welcome. Ineligible: India. EOR not supported in this region.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-068",
+        "title": "Junior Python Bot Developer",
+        "company": "Agentic Co",
+        "location": "Worldwide Remote",
+        "description": "Worldwide remote role. Closed to candidates in India due to corporate entity restrictions.",
+        "is_remote": True,
+        "category_group": "Explicit India Exclusion",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+
+    # =========================================================================
+    # Group 6: Country-Restricted Remote (US, UK, Canada, Australia) (14 cases)
+    # =========================================================================
+    {
+        "id": "BENCH-069",
+        "title": "Junior AI Engineer",
+        "company": "Palantir",
+        "location": "Remote - US Only",
+        "description": "Must be located in the United States. US citizenship required for federal deployment.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-070",
+        "title": "LLM Backend Developer",
+        "company": "Capital One",
+        "location": "US Remote",
+        "description": "US residents only. Candidate must have active secret clearance.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-071",
+        "title": "Python AI Trainee",
+        "company": "Shopify",
+        "location": "Canada Only",
+        "description": "Must reside in Canada. 100% remote within Canadian provinces.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-072",
+        "title": "AI Research Assistant",
+        "company": "Monzo Bank",
+        "location": "UK Only",
+        "description": "UK only remote. Applicants must have unrestricted right to work in the UK.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-073",
+        "title": "Junior Machine Learning Engineer",
+        "company": "Atlassian Corp",
+        "location": "Australia Only",
+        "description": "Must reside in Australia. Remote role within Australian territory.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-074",
+        "title": "Full Stack AI Developer",
+        "company": "DefenseTech US",
+        "location": "United States",
+        "description": "Must be a US citizen. Security clearance required.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-075",
+        "title": "NLP Data Engineer",
+        "company": "RBC Capital",
+        "location": "Canada Remote",
+        "description": "Canada only. Must have existing work authorization in Canada.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-076",
+        "title": "AI Integration Engineer",
+        "company": "Revolut UK",
+        "location": "United Kingdom",
+        "description": "Must reside in the UK. No visa sponsorship provided.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-077",
+        "title": "Junior Python Developer",
+        "company": "Intuit",
+        "location": "US Only",
+        "description": "United States only. Cannot sponsor visas. Candidate must reside in the US.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-078",
+        "title": "Prompt Engineer",
+        "company": "Federal Tech Solutions",
+        "location": "Washington DC, United States",
+        "description": "Active secret clearance required. US citizenship required.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-079",
+        "title": "AI Ops Engineer",
+        "company": "Telstra",
+        "location": "Sydney, Australia",
+        "description": "Must reside in Australia. Unrestricted working rights required.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-080",
+        "title": "Junior AI Tester",
+        "company": "Wealthsimple",
+        "location": "Toronto, Canada",
+        "description": "Canada only. Must be legally entitled to work in Canada.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-081",
+        "title": "Machine Learning Engineer",
+        "company": "Starling Bank",
+        "location": "London, UK",
+        "description": "UK only. Right to work in the UK required. No visa sponsorship.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-082",
+        "title": "AI Systems Analyst",
+        "company": "Boeing",
+        "location": "United States",
+        "description": "Must be located in the US. Security clearance required.",
+        "is_remote": True,
+        "category_group": "Country Restricted",
+        "expected_category": "COUNTRY_RESTRICTED",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+
+    # =========================================================================
+    # Group 7: Germany Remote Only / Europe Remote Only (10 cases)
+    # =========================================================================
+    {
+        "id": "BENCH-083",
+        "title": "Junior Python Developer",
+        "company": "TechCorp DE",
+        "location": "Deutschlandweit Remote",
+        "description": "Deutschlandweit remote. Wohnsitz in Deutschland erforderlich.",
+        "is_remote": True,
+        "category_group": "Germany Remote",
+        "expected_category": "GERMANY_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-084",
+        "title": "AI Software Engineer",
+        "company": "Berlin Cloud AG",
+        "location": "Remote in Germany",
+        "description": "Remote within Germany only. You must be resident in Germany.",
+        "is_remote": True,
+        "category_group": "Germany Remote",
+        "expected_category": "GERMANY_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-085",
+        "title": "Junior Data Engineer",
+        "company": "Munich Dataworks",
+        "location": "Germany Remote",
+        "description": "Wohnsitz in Deutschland und Arbeitserlaubnis erforderlich. Remote in Germany.",
+        "is_remote": True,
+        "category_group": "Germany Remote",
+        "expected_category": "GERMANY_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-086",
+        "title": "Prompt & Python Engineer",
+        "company": "Frankfurt FinTech",
+        "location": "Deutschlandweit Remote",
+        "description": "Deutschlandweit remote möglich für Kandidaten mit bestehendem Wohnsitz.",
+        "is_remote": True,
+        "category_group": "Germany Remote",
+        "expected_category": "GERMANY_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-087",
+        "title": "Junior AI Systems Builder",
+        "company": "EuroCloud Solutions",
+        "location": "EU Remote",
+        "description": "Remote across Europe. Must be based in the EU. Candidates must reside in European timezones.",
+        "is_remote": True,
+        "category_group": "Europe Remote",
+        "expected_category": "EUROPE_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-088",
+        "title": "NLP Developer",
+        "company": "Nordic Text AI",
+        "location": "Europe Remote",
+        "description": "Must be based in Europe. Working hours strictly align with CET timezone.",
+        "is_remote": True,
+        "category_group": "Europe Remote",
+        "expected_category": "EUROPE_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-089",
+        "title": "Early Career ML Engineer",
+        "company": "EuroAI Network",
+        "location": "Remote in Europe",
+        "description": "Remote in Europe. Only applicants with permanent residence in EU member states.",
+        "is_remote": True,
+        "category_group": "Europe Remote",
+        "expected_category": "EUROPE_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-090",
+        "title": "Python Backend Trainee",
+        "company": "Bavaria Systems",
+        "location": "Remote within Germany",
+        "description": "Remote within Germany. No international hiring supported.",
+        "is_remote": True,
+        "category_group": "Germany Remote",
+        "expected_category": "GERMANY_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-091",
+        "title": "Junior AI Platform Engineer",
+        "company": "Stuttgart Mobility",
+        "location": "Deutschlandweit Remote",
+        "description": "Deutschlandweit remote. Work from your home office anywhere in Germany.",
+        "is_remote": True,
+        "category_group": "Germany Remote",
+        "expected_category": "GERMANY_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-092",
+        "title": "Machine Learning Associate",
+        "company": "EU Analytics Group",
+        "location": "EU Remote",
+        "description": "Must be based in the EU or UK. Timezone UTC+1 required.",
+        "is_remote": True,
+        "category_group": "Europe Remote",
+        "expected_category": "EUROPE_REMOTE",
+        "expected_actionability": "INELIGIBLE",
+        "expected_can_apply_from_india": False
+    },
+
+    # =========================================================================
+    # Group 8: Ambiguous / Unclear Remote / Location Verification Required (8 cases)
+    # =========================================================================
+    {
+        "id": "BENCH-093",
+        "title": "Junior Python / AI Developer",
+        "company": "Stealth AI Startup",
+        "location": "Remote",
+        "description": "We are seeking a junior Python developer with experience in LangChain and FastAPI. Remote work available.",
+        "is_remote": True,
+        "category_group": "Ambiguous / Needs Verification",
+        "expected_category": "ELIGIBILITY_UNKNOWN",
+        "expected_actionability": "PENDING_LOCATION_VERIFICATION",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-094",
+        "title": "AI Integration Specialist",
+        "company": "OmniSoftware",
+        "location": "Flexible",
+        "description": "Flexible working arrangements. Help build automation agents for customer success teams.",
+        "is_remote": False,
+        "category_group": "Ambiguous / Needs Verification",
+        "expected_category": "ELIGIBILITY_UNKNOWN",
+        "expected_actionability": "PENDING_LOCATION_VERIFICATION",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-095",
+        "title": "Junior Machine Learning Engineer",
+        "company": "DataCraft",
+        "location": "Berlin / Hybrid",
+        "description": "Office located in Berlin. Hybrid working model with remote friendly culture.",
+        "is_remote": False,
+        "category_group": "Ambiguous / Needs Verification",
+        "expected_category": "ELIGIBILITY_UNKNOWN",
+        "expected_actionability": "PENDING_LOCATION_VERIFICATION",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-096",
+        "title": "Early Career Python Developer",
+        "company": "AlphaWave",
+        "location": "Remote",
+        "description": "Work from home available. Build resilient data ingestion services using Python and Redis.",
+        "is_remote": True,
+        "category_group": "Ambiguous / Needs Verification",
+        "expected_category": "ELIGIBILITY_UNKNOWN",
+        "expected_actionability": "PENDING_LOCATION_VERIFICATION",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-097",
+        "title": "LLM Prompt & Evaluation Engineer",
+        "company": "DeepPulse",
+        "location": "Remote",
+        "description": "Join our remote team. Evaluate output consistency and safety across diverse prompt sets.",
+        "is_remote": True,
+        "category_group": "Ambiguous / Needs Verification",
+        "expected_category": "ELIGIBILITY_UNKNOWN",
+        "expected_actionability": "PENDING_LOCATION_VERIFICATION",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-098",
+        "title": "Junior AI Engineer",
+        "company": "Nexus Technologies",
+        "location": "Remote - See Description",
+        "description": "Strong knowledge of Python 3.11, PyTorch, and Docker. Contact hiring manager for details.",
+        "is_remote": True,
+        "category_group": "Ambiguous / Needs Verification",
+        "expected_category": "ELIGIBILITY_UNKNOWN",
+        "expected_actionability": "PENDING_LOCATION_VERIFICATION",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-099",
+        "title": "AI Backend Developer",
+        "company": "VentureLab",
+        "location": "Hybrid",
+        "description": "Great company culture, competitive equity, and flexible remote days.",
+        "is_remote": False,
+        "category_group": "Ambiguous / Needs Verification",
+        "expected_category": "ELIGIBILITY_UNKNOWN",
+        "expected_actionability": "PENDING_LOCATION_VERIFICATION",
+        "expected_can_apply_from_india": False
+    },
+    {
+        "id": "BENCH-100",
+        "title": "Junior Python / NLP Developer",
+        "company": "Insightful Labs",
+        "location": "Remote",
+        "description": "Passionate about open-source models? We offer remote flexibility and modern tooling.",
+        "is_remote": True,
+        "category_group": "Ambiguous / Needs Verification",
+        "expected_category": "ELIGIBILITY_UNKNOWN",
+        "expected_actionability": "PENDING_LOCATION_VERIFICATION",
+        "expected_can_apply_from_india": False
+    }
+]
+
+out_path = Path("benchmarks/eligibility/benchmark_cases.json")
+out_path.parent.mkdir(parents=True, exist_ok=True)
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(cases, f, indent=2, ensure_ascii=False)
+
+print(f"Generated {len(cases)} benchmark cases in {out_path}")

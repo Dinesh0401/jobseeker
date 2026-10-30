@@ -1,0 +1,90 @@
+{
+  "total_cases": 100,
+  "correct_actionability_and_india": 100,
+  "accuracy_pct": 100.0,
+  "false_eligible_count": 0,
+  "false_ineligible_count": 0,
+  "false_hold_count": 0,
+  "false_eligible_details": [],
+  "false_ineligible_details": [],
+  "false_hold_details": [],
+  "group_metrics": {
+    "Worldwide Remote": {
+      "total": 18,
+      "correct": 18,
+      "false_eligible": 0,
+      "false_ineligible": 0,
+      "held": 0
+    },
+    "India Eligible Remote": {
+      "total": 14,
+      "correct": 14,
+      "false_eligible": 0,
+      "false_ineligible": 0,
+      "held": 0
+    },
+    "Relocation + Sponsorship": {
+      "total": 14,
+      "correct": 14,
+      "false_eligible": 0,
+      "false_ineligible": 0,
+      "held": 0
+    },
+    "Relocation without Sponsorship": {
+      "total": 10,
+      "correct": 10,
+      "false_eligible": 0,
+      "false_ineligible": 0,
+      "held": 0
+    },
+    "Explicit India Exclusion": {
+      "total": 12,
+      "correct": 12,
+      "false_eligible": 0,
+      "false_ineligible": 0,
+      "held": 0
+    },
+    "Country Restricted": {
+      "total": 14,
+      "correct": 14,
+      "false_eligible": 0,
+      "false_ineligible": 0,
+      "held": 0
+    },
+    "Germany Remote": {
+      "total": 6,
+      "correct": 6,
+      "false_eligible": 0,
+      "false_ineligible": 0,
+      "held": 0
+    },
+    "Europe Remote": {
+      "total": 4,
+      "correct": 4,
+      "false_eligible": 0,
+      "false_ineligible": 0,
+      "held": 0
+    },
+    "Ambiguous / Needs Verification": {
+      "total": 8,
+      "correct": 8,
+      "false_eligible": 0,
+      "false_ineligible": 0,
+      "held": 8
+    }
+  },
+  "confusion_matrix": {
+    "CONFIRMED_ELIGIBLE": {
+      "CONFIRMED_ELIGIBLE": 32
+    },
+    "RELOCATION_PATHWAY": {
+      "RELOCATION_PATHWAY": 14
+    },
+    "INELIGIBLE": {
+      "INELIGIBLE": 46
+    },
+    "PENDING_LOCATION_VERIFICATION": {
+      "PENDING_LOCATION_VERIFICATION": 8
+    }
+  }
+}

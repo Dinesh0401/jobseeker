@@ -1,7 +1,7 @@
 name: Follow-up Scanner
 on:
-  schedule:
-    - cron: '0 9 * * *'  # Daily at 9:00 UTC
+  # schedule:
+  #   - cron: '0 9 * * *'  # Paused during validation / benchmarking
   workflow_dispatch:
 
 jobs:

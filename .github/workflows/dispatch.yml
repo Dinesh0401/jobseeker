@@ -1,7 +1,7 @@
 name: Job Dispatch Worker
 on:
-  schedule:
-    - cron: '*/15 * * * *'  # Runs every 15 minutes
+  # schedule:
+  #   - cron: '*/15 * * * *'  # Paused during validation / benchmarking
   workflow_dispatch:
 
 jobs:
