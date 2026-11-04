@@ -1,90 +1,202 @@
 {
   "total_cases": 100,
-  "correct_actionability_and_india": 100,
-  "accuracy_pct": 100.0,
-  "false_eligible_count": 0,
-  "false_ineligible_count": 0,
-  "false_hold_count": 0,
-  "false_eligible_details": [],
-  "false_ineligible_details": [],
-  "false_hold_details": [],
-  "group_metrics": {
-    "Worldwide Remote": {
-      "total": 18,
-      "correct": 18,
-      "false_eligible": 0,
-      "false_ineligible": 0,
-      "held": 0
-    },
-    "India Eligible Remote": {
-      "total": 14,
-      "correct": 14,
-      "false_eligible": 0,
-      "false_ineligible": 0,
-      "held": 0
-    },
-    "Relocation + Sponsorship": {
-      "total": 14,
-      "correct": 14,
-      "false_eligible": 0,
-      "false_ineligible": 0,
-      "held": 0
-    },
-    "Relocation without Sponsorship": {
-      "total": 10,
-      "correct": 10,
-      "false_eligible": 0,
-      "false_ineligible": 0,
-      "held": 0
-    },
-    "Explicit India Exclusion": {
-      "total": 12,
-      "correct": 12,
-      "false_eligible": 0,
-      "false_ineligible": 0,
-      "held": 0
-    },
-    "Country Restricted": {
-      "total": 14,
-      "correct": 14,
-      "false_eligible": 0,
-      "false_ineligible": 0,
-      "held": 0
-    },
-    "Germany Remote": {
-      "total": 6,
-      "correct": 6,
-      "false_eligible": 0,
-      "false_ineligible": 0,
-      "held": 0
-    },
-    "Europe Remote": {
-      "total": 4,
-      "correct": 4,
-      "false_eligible": 0,
-      "false_ineligible": 0,
-      "held": 0
-    },
-    "Ambiguous / Needs Verification": {
-      "total": 8,
-      "correct": 8,
-      "false_eligible": 0,
-      "false_ineligible": 0,
-      "held": 8
-    }
-  },
+  "exact_match_count": 98,
+  "exact_match_accuracy_pct": 98.0,
+  "binary_actionable_accuracy_pct": 100.0,
+  "true_positives": 38,
+  "true_negatives": 62,
+  "false_positives": 0,
+  "false_negatives": 0,
+  "precision_pct": 100.0,
+  "recall_pct": 100.0,
+  "f1_score": 100.0,
   "confusion_matrix": {
     "CONFIRMED_ELIGIBLE": {
-      "CONFIRMED_ELIGIBLE": 32
+      "CONFIRMED_ELIGIBLE": 26,
+      "RELOCATION_PATHWAY": 0,
+      "PENDING_LOCATION_VERIFICATION": 0,
+      "INELIGIBLE": 0
     },
     "RELOCATION_PATHWAY": {
-      "RELOCATION_PATHWAY": 14
-    },
-    "INELIGIBLE": {
-      "INELIGIBLE": 46
+      "CONFIRMED_ELIGIBLE": 0,
+      "RELOCATION_PATHWAY": 12,
+      "PENDING_LOCATION_VERIFICATION": 0,
+      "INELIGIBLE": 0
     },
     "PENDING_LOCATION_VERIFICATION": {
-      "PENDING_LOCATION_VERIFICATION": 8
+      "CONFIRMED_ELIGIBLE": 0,
+      "RELOCATION_PATHWAY": 0,
+      "PENDING_LOCATION_VERIFICATION": 10,
+      "INELIGIBLE": 0
+    },
+    "INELIGIBLE": {
+      "CONFIRMED_ELIGIBLE": 0,
+      "RELOCATION_PATHWAY": 0,
+      "PENDING_LOCATION_VERIFICATION": 2,
+      "INELIGIBLE": 50
     }
-  }
+  },
+  "category_metrics": {
+    "Explicitly Eligible from India": {
+      "total": 12,
+      "correct": 12,
+      "accuracy_pct": 100.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 0,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "Worldwide Remote": {
+      "total": 14,
+      "correct": 14,
+      "accuracy_pct": 100.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 0,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "Worldwide Remote with India Exclusion": {
+      "total": 4,
+      "correct": 4,
+      "accuracy_pct": 100.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 0,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "Other": {
+      "total": 16,
+      "correct": 16,
+      "accuracy_pct": 100.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 0,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "Remote Restricted to Specific Countries": {
+      "total": 19,
+      "correct": 18,
+      "accuracy_pct": 94.74,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 2,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "EU-Only & Germany-Only Remote": {
+      "total": 11,
+      "correct": 11,
+      "accuracy_pct": 100.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 0,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "Time-Zone Restricted Roles": {
+      "total": 2,
+      "correct": 1,
+      "accuracy_pct": 50.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 1,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "Relocation-Supported Opportunities": {
+      "total": 11,
+      "correct": 11,
+      "accuracy_pct": 100.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 0,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "Relocation without Sponsorship / Work Auth Required": {
+      "total": 2,
+      "correct": 2,
+      "accuracy_pct": 100.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 0,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "Ambiguous Remote Eligibility": {
+      "total": 5,
+      "correct": 5,
+      "accuracy_pct": 100.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 5,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    },
+    "Missing Location Information": {
+      "total": 4,
+      "correct": 4,
+      "accuracy_pct": 100.0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "held_for_verification": 4,
+      "precision_pct": 100.0,
+      "recall_pct": 100.0,
+      "f1_score": 100.0
+    }
+  },
+  "misclassified_cases": [
+    {
+      "id": "BENCH-059",
+      "title": "Junior AI Support Engineer",
+      "group": "Remote Restricted to Specific Countries",
+      "location": "Remote",
+      "description": "Remote. Mandatory overlap with US East Coast business hours (9am - 5pm EST). Must be based in the US or Canada.",
+      "expected_category": "COUNTRY_RESTRICTED",
+      "predicted_category": "ELIGIBILITY_UNKNOWN",
+      "expected_actionability": "INELIGIBLE",
+      "predicted_actionability": "PENDING_LOCATION_VERIFICATION",
+      "expected_can_apply_from_india": false,
+      "predicted_can_apply_from_india": false,
+      "evidence": [
+        "No explicit worldwide, India, or relocation evidence found."
+      ],
+      "responsible_rule_or_gap": "Fallback to ELIGIBILITY_UNKNOWN because no positive or negative regex triggered.",
+      "recommended_correction": "Add pattern to recognize this specific geographic indicator."
+    },
+    {
+      "id": "BENCH-061",
+      "title": "Associate LLM Evaluator",
+      "group": "Time-Zone Restricted Roles",
+      "location": "Remote (PST Timezone)",
+      "description": "Remote. Working hours strictly 9am - 5pm PST. Must reside in the US or Mexico.",
+      "expected_category": "COUNTRY_RESTRICTED",
+      "predicted_category": "ELIGIBILITY_UNKNOWN",
+      "expected_actionability": "INELIGIBLE",
+      "predicted_actionability": "PENDING_LOCATION_VERIFICATION",
+      "expected_can_apply_from_india": false,
+      "predicted_can_apply_from_india": false,
+      "evidence": [
+        "No explicit worldwide, India, or relocation evidence found."
+      ],
+      "responsible_rule_or_gap": "Fallback to ELIGIBILITY_UNKNOWN because no positive or negative regex triggered.",
+      "recommended_correction": "Add pattern to recognize this specific geographic indicator."
+    }
+  ],
+  "false_positives_details": [],
+  "false_negatives_details": []
 }
