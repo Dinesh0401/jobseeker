@@ -30,6 +30,22 @@ class GermanRequirement(str, Enum):
     OPTIONAL_A1_A2 = "OPTIONAL_A1_A2"
     UNKNOWN = "UNKNOWN"
 
+
+def to_db_german_requirement(req: Optional[GermanRequirement]) -> str:
+    """
+    Ensure value strictly conforms to PostgreSQL table check constraint:
+    CHECK (german_requirement IN ('MANDATORY_C1_PLUS', 'PREFERRED_B1_B2', 'OPTIONAL_A1_A2', 'UNKNOWN'))
+    """
+    if not req:
+        return "UNKNOWN"
+    if req in (GermanRequirement.MANDATORY_C1_PLUS, GermanRequirement.MANDATORY_B2, GermanRequirement.MANDATORY_B1):
+        return "MANDATORY_C1_PLUS"
+    if req == GermanRequirement.PREFERRED_B1_B2:
+        return "PREFERRED_B1_B2"
+    if req == GermanRequirement.OPTIONAL_A1_A2:
+        return "OPTIONAL_A1_A2"
+    return "UNKNOWN"
+
 class EmailType(str, Enum):
     APPLICATION = "APPLICATION"
     RECRUITER = "RECRUITER"

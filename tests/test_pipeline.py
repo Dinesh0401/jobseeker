@@ -81,6 +81,10 @@ def mock_db():
             return [j for j in self.jobs.values() if j['state'] == state]
 
         def upsert_evaluation(self, job_id, data):
+            if "german_requirement" in data:
+                allowed = ("MANDATORY_C1_PLUS", "PREFERRED_B1_B2", "OPTIONAL_A1_A2", "UNKNOWN")
+                if data["german_requirement"] not in allowed:
+                    raise ValueError(f"Constraint violation: {data['german_requirement']} not in {allowed}")
             if job_id not in self.evaluations:
                 self.evaluations[job_id] = {}
             self.evaluations[job_id].update(data)

@@ -17,7 +17,7 @@ from src.config import load_config
 from src.db.client import DatabaseClient, InvalidStateTransition
 from src.collectors.aggregator import JobCollectorAggregator
 from src.evaluators.eligibility import ActionabilityState
-from src.evaluators.extraction import run_extraction, DocumentRequirement
+from src.evaluators.extraction import run_extraction, DocumentRequirement, to_db_german_requirement
 from src.matching.evaluator import SemanticMatcher
 from src.cv.builder import CVBuilder
 from src.cv.pdf_validator import validate_compiled_pdf, PDFValidationError
@@ -60,7 +60,7 @@ def phase_generate_tex(
         evaluation_data = {
             "contact_email": extraction.contact_email,
             "min_experience": extraction.min_experience,
-            "german_requirement": extraction.german_requirement.value,
+            "german_requirement": to_db_german_requirement(extraction.german_requirement),
             "score": 0,
         }
         db.upsert_evaluation(job["id"], evaluation_data)
@@ -82,6 +82,8 @@ def phase_generate_tex(
 
         job_loc = job.get("location", "") or ""
         job_remote = bool(job.get("is_remote", False)) or ("remote" in title.lower() or "remote" in desc.lower())
+
+        extraction = run_extraction(desc)
 
         res = matcher.evaluate(
             title=title,
@@ -114,8 +116,8 @@ def phase_generate_tex(
             "gaps": json.dumps(res.gaps),
             "tailored_cv_bullets": json.dumps(res.matched_experience_keys + res.matched_project_keys),
             "cover_letter_pitch": res.cover_letter_pitch,
-            "german_requirement": res.language_category.value,
-            "min_experience": extraction.min_experience if extraction else None,
+            "german_requirement": to_db_german_requirement(extraction.german_requirement),
+            "min_experience": extraction.min_experience,
         })
 
         if (
