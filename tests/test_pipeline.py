@@ -77,7 +77,7 @@ def mock_db():
             self.inserted_actions.append(job_id)
             return {"id": new_id}
 
-        def get_jobs_by_state(self, state):
+        def get_jobs_by_state(self, state, limit=100, desc=False):
             return [j for j in self.jobs.values() if j['state'] == state]
 
         def upsert_evaluation(self, job_id, data):

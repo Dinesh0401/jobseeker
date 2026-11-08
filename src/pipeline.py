@@ -71,11 +71,17 @@ def phase_generate_tex(
 
     # 3. Multi-Dimensional Semantic Evaluation
     matcher = SemanticMatcher(profile_dir=profile_dir)
-    evaluated = db.get_jobs_by_state("EVALUATED")
+    evaluated = db.get_jobs_by_state("EVALUATED", limit=300, desc=True)
     summary.jobs_evaluated = len(evaluated)
 
     for job in evaluated:
         job_id = job["id"]
+
+        # Fast skip: if already evaluated by v2.0 matcher in a prior run (e.g. held jobs), skip re-evaluating
+        existing_eval = db.get_evaluation(job_id)
+        if existing_eval and existing_eval.get("method") == "v2.0-multi-dimensional":
+            continue
+
         title = job.get("title", "")
         company = job.get("company", "")
         desc = job.get("description", "")

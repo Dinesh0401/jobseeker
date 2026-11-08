@@ -202,13 +202,13 @@ class DatabaseClient:
         )
         return result.data[0] if result.data else None
 
-    def get_jobs_by_state(self, state: str, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_jobs_by_state(self, state: str, limit: int = 100, desc: bool = False) -> List[Dict[str, Any]]:
         """Fetch jobs filtered by state, ordered by creation time."""
         result = (
             self._client.table("jobs")
             .select("*")
             .eq("state", state)
-            .order("created_at", desc=False)
+            .order("created_at", desc=desc)
             .limit(limit)
             .execute()
         )
