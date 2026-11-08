@@ -93,13 +93,21 @@ class JobCollectorAggregator:
             report.jobs_relevant += 1
 
             canonical_url = normalize_url(raw_job.url)
+
+            # Preserve location & remote indicators in description for downstream deterministic classifiers
+            desc_with_loc = raw_job.description or ""
+            if raw_job.location and raw_job.location.lower() not in desc_with_loc.lower():
+                desc_with_loc = f"Location: {raw_job.location}\n\n{desc_with_loc}"
+            if raw_job.is_remote and "remote" not in desc_with_loc.lower():
+                desc_with_loc = f"Workplace: Remote\n{desc_with_loc}"
+
             try:
                 result = db.insert_job(
                     source=raw_job.source,
                     title=raw_job.title,
                     company=raw_job.company,
                     url=canonical_url,
-                    description=raw_job.description,
+                    description=desc_with_loc,
                 )
                 if result is not None:
                     report.jobs_inserted += 1

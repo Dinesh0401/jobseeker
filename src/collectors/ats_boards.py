@@ -41,11 +41,13 @@ class GreenhousePublicAdapter(JobSourceAdapter):
             "User-Agent": "JobHunterBot/2.0 (Career Discovery Engine; contact: dinesh@example.com)",
             "Accept": "application/json",
         }
+        per_board_limit = max(5, limit // max(1, len(self._board_tokens)))
 
         for token in self._board_tokens:
             if len(jobs) >= limit:
                 break
 
+            board_count = 0
             url = f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true"
             try:
                 resp = requests.get(url, headers=headers, timeout=20)
@@ -85,8 +87,9 @@ class GreenhousePublicAdapter(JobSourceAdapter):
                             raw_payload={"board": token},
                         )
                     )
+                    board_count += 1
 
-                    if len(jobs) >= limit:
+                    if board_count >= per_board_limit or len(jobs) >= limit:
                         break
 
             except Exception as e:
