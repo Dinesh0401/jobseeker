@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 class JobicyAdapter(JobSourceAdapter):
     """Adapter for Jobicy Remote Jobs public API."""
 
-    def __init__(self, base_url: str = "https://jobicy.com/api/v2/remote-jobs", count: int = 50, tag: str = "dev"):
+    def __init__(self, base_url: str = "https://jobicy.com/api/v2/remote-jobs", count: int = 50, tag: str = "dev", geo: str = "anywhere"):
         self._base_url = base_url
         self._count = count
         self._tag = tag
+        self._geo = geo
 
     @property
     def source_name(self) -> str:
@@ -33,6 +34,7 @@ class JobicyAdapter(JobSourceAdapter):
         params = {
             "count": min(limit, self._count),
             "tag": self._tag,
+            "geo": self._geo,
         }
         headers = {
             "User-Agent": "JobHunterBot/2.0 (Career Discovery Engine; contact: dinesh@example.com)",

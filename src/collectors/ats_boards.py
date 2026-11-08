@@ -16,9 +16,10 @@ logger = logging.getLogger(__name__)
 
 # Curated list of international, remote-friendly tech organizations with public ATS feeds
 DEFAULT_GREENHOUSE_BOARDS = [
-    "canonical",
-    "automattic",
     "gitlab",
+    "canonical",
+    "elastic",
+    "cockroachlabs",
 ]
 
 DEFAULT_LEVER_BOARDS = []
