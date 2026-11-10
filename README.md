@@ -1,6 +1,6 @@
 # Job Hunter v2 — International AI Career Discovery & Application Engine
 
-> An autonomous, deterministic, and verifiable career discovery and application engine built with Python 3.11+, Supabase PostgreSQL, Telegram Bot API, and Google Gemini 2.5 Flash.
+> An autonomous, deterministic, and verifiable career discovery and application engine built with Python 3.11+, Supabase PostgreSQL, Telegram Bot API, and Google Gemini 2.5 Flash. 
 
 ---
 
